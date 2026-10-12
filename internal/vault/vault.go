@@ -96,6 +96,23 @@ func (v *Vault) Len() int {
 	return len(v.tokenToSec)
 }
 
+// Secrets mengembalikan SALINAN seluruh nilai secret yang diketahui vault.
+//
+// PERINGATAN KEAMANAN: method ini membuka nilai asli secret. Ia DIBUAT KHUSUS
+// untuk safety-net runtime (internal/leakscan) yang berjalan IN-PROCESS untuk
+// memverifikasi bahwa output tool tidak membocorkan secret sebelum dikirim ke
+// LLM. Nilai dari sini TIDAK BOLEH ditulis ke disk/log atau dikirim ke LLM.
+// Jangan ekspos lewat tool MCP mana pun.
+func (v *Vault) Secrets() []string {
+	v.mu.RLock()
+	defer v.mu.RUnlock()
+	out := make([]string, 0, len(v.secToToken))
+	for s := range v.secToToken {
+		out = append(out, s)
+	}
+	return out
+}
+
 // Fingerprint tidak disediakan di sini; audit log (PRD §10) bertanggung jawab
 // menghitung fingerprint agar Vault tetap murni sebagai penyimpanan.
 

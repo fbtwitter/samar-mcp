@@ -31,7 +31,7 @@ flowchart TD
         subgraph Inbound ["Inbound Path (Read)"]
             SRF["samar_read_file"]
             SGE["samar_get_env"]
-            DET["Detector Engine (Regex & DotEnv)"]
+            DET["Detector Engine (Registry)<br/>DotEnv + Regex + Custom patterns<br/>+ Entropy (opt-in)"]
             MSK["Masking Engine"]
         end
 
@@ -42,6 +42,7 @@ flowchart TD
             RST["Restorer (Fail-Closed)"]
         end
 
+        SN["Safety-Net<br/>(final leak re-tokenize)"]
         VAULT[("In-Memory Ephemeral Vault\n(Zero-Persistence)")]
     end
 
@@ -54,9 +55,10 @@ flowchart TD
 
     FS --> SRF
     ENV --> SGE
-    SRF --> DET --> MSK --> LLM
+    SRF --> DET --> MSK --> SN --> LLM
     SGE --> DET --> MSK
     MSK <-->|"Tokenize (Random)"| VAULT
+    SN <-->|"Scan + Re-Tokenize known secrets"| VAULT
 
     LLM --> SWF
     LLM --> SEC
@@ -67,6 +69,7 @@ flowchart TD
     RST <-->|"Detokenize"| VAULT
     SWF --> FS
     SEC --> EXEC --> NET
+    EXEC -->|"stdout/stderr re-masked"| SN
 ```
 
 ---
@@ -121,6 +124,18 @@ Without this step, built-in client tools can bypass Samar and read secrets direc
 ### Core Engine
 - Two-way in-memory token↔secret vault, using **cryptographically random** tokens (not value hashes) with reverse-mapping for session determinism.
 - Detectors: `.env*` parser (masks all values) + regex rule-set (AWS, GitHub, OpenAI, Slack, Stripe, Google, JWT, database URIs, private keys, generic assignments).
+- **Custom patterns (user-defined, hot-reload):** add your own secret formats via a plain-text config file — no rebuild needed. One regex per line; `#` lines and blank lines are ignored. If a pattern defines a named `secret` capture group, only that group is masked (otherwise the whole match). Invalid patterns are skipped without disabling the rest, and an unreadable file keeps the previously loaded patterns (fail-safe). Changes are picked up automatically (lazy mtime check every 5s), same mechanism as the egress allowlist.
+  - Global: `~/.samar/patterns` (fallback: `~/.safeenv/patterns`)
+  - Per-project: `./.samar/patterns` (fallback: `./.safeenv/patterns`)
+  - Example `patterns` file:
+    ```text
+    # Internal deploy token: ACME- followed by 10 digits
+    ACME-[0-9]{10}
+    # Mask only the value after "internal_key:"
+    internal_key:\s*(?P<secret>[A-Z0-9]{8,})
+    ```
+- **Entropy detection (opt-in, `SAMAR_ENTROPY=1`):** an extra net for *bare* high-entropy tokens that carry no keyword (so Regex misses them) and live outside `.env` (so DotEnv misses them). Uses Shannon entropy over whitespace-delimited words, with conservative guards (length bounds, skips UUIDs, pure digits, natural-language words). **Off by default** because it can raise false positives on hashes/UUIDs/base64 blobs; enable it when you prioritize recall.
+- **Runtime leak safety-net (always on):** a final verification before any tool result is returned to the LLM. It scans the output for any secret the vault already knows and, if one slipped through on a different path, **re-tokenizes it** using the same vault token (patching, not just failing). A patched leak is recorded in the audit log as `leak_patched`.
 
 ---
 
@@ -130,6 +145,7 @@ Without this step, built-in client tools can bypass Samar and read secrets direc
 | :--- | :--- | :--- | :--- |
 | `SAMAR_STRICT_ALLOWLIST` | `1` / `0` | `0` (union) | When set to `1`, per-project allowlist narrows the global allowlist (`global ∩ project`). Default: union merge (`global ∪ project`). (Backward-compatible fallback: `SAFEENV_STRICT_ALLOWLIST`). |
 | `SAMAR_REQUIRE_CONFIRM` | `""`, `"off"`, `"elicit"`, `"deny"` | `""` (off) | Human-in-the-loop confirmation before outbound network calls containing unmasked secrets:<br>• `""` / `"off"`: auto-approve if destination host is in allowlist (warning logged to stderr).<br>• `"elicit"`: request interactive approval via MCP elicitation (fail-closed if client lacks support).<br>• `"deny"`: reject all network commands containing tokens.<br>(Backward-compatible fallback: `SAFEENV_REQUIRE_CONFIRM`). |
+| `SAMAR_ENTROPY` | `1` / `0` | `0` (off) | When `1`, enables opt-in Shannon-entropy detection of bare high-entropy tokens (no keyword, non-`.env`). May increase false positives on hashes/UUIDs/base64. (Backward-compatible fallback: `SAFEENV_ENTROPY`). |
 
 ---
 
@@ -141,11 +157,12 @@ Every component depends on **interfaces**, not concrete types; implementations a
 cmd/samar              composition root — sole dependency wiring location
 internal/vault         in-memory secret↔token storage (SRP)
 internal/idgen         TokenGenerator backed by crypto/rand
-internal/detector      Detector interface + Registry (ISP, OCP) + dotenv & regex
+internal/detector      Detector interface + Registry (ISP, OCP) + dotenv, regex, custom (hot-reload), entropy (opt-in)
 internal/masking       Masking Engine: detect→tokenize→replace, depends on abstractions (DIP)
 internal/restore       Restorer: token→secret, fail-closed on corrupt tokens (M1)
 internal/policy        Exfiltration & confused-deputy policy, fail-closed (M1)
 internal/allowlist     Layered egress allowlist + hot lazy reload (M1)
+internal/leakscan      Runtime safety-net: scan tool output + re-tokenize known leaks
 internal/safeio        FileReader/EnvReader/FileWriter/CommandRunner abstractions (DIP)
 internal/server        MCP tool registration & dispatch handlers (DIP)
 ```

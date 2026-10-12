@@ -19,6 +19,7 @@ import (
 	"github.com/hanifalkauni/samar-mcp/internal/audit"
 	"github.com/hanifalkauni/samar-mcp/internal/detector"
 	"github.com/hanifalkauni/samar-mcp/internal/idgen"
+	"github.com/hanifalkauni/samar-mcp/internal/leakscan"
 	"github.com/hanifalkauni/samar-mcp/internal/masking"
 	"github.com/hanifalkauni/samar-mcp/internal/policy"
 	"github.com/hanifalkauni/samar-mcp/internal/restore"
@@ -172,6 +173,14 @@ ENVIRONMENT
                                "elicit" = minta persetujuan via MCP elicitation
                                (fail-closed bila client tak mendukung).
                                "deny" = selalu tolak aksi jaringan bertoken.
+  SAMAR_ENTROPY=1              Aktifkan deteksi entropi (OPT-IN): tangkap secret
+                               berentropi tinggi tanpa kata-kunci. Default nonaktif
+                               (bisa menambah false-positive pada hash/UUID/base64).
+
+POLA KUSTOM (detektor, jalur inbound)
+  Global:      ~/.samar/patterns (fallback: ~/.safeenv/patterns)
+  Per-project: ./.samar/patterns (fallback: ./.safeenv/patterns)
+  Satu regex per baris; '#' komentar; grup bernama 'secret' = mask grup saja.
 
 ALLOWLIST (egress, jalur outbound)
   Global:      ~/.samar/allowlist (fallback: ~/.safeenv/allowlist)
@@ -190,10 +199,34 @@ func run() error {
 	// --- Rakit graf dependency (composition root) ---
 	v := vault.New(idgen.NewCryptoGen())
 
-	det := detector.NewRegistry(
+	// Pola kustom yang didefinisikan pengguna via file config (hot-reload),
+	// untuk secret berformat khusus/organisasi yang tak dikenali rule-set
+	// default. Global (~/.samar/patterns) + per-project (./.samar/patterns),
+	// dengan fallback nama lama (~/.safeenv, ./.safeenv) demi kompatibilitas.
+	homeDir, _ := os.UserHomeDir()
+	customDet := detector.NewCustomRegex(5*time.Second,
+		filepath.Join(homeDir, ".samar", "patterns"),
+		filepath.Join(homeDir, ".safeenv", "patterns"),
+		filepath.Join(".samar", "patterns"),
+		filepath.Join(".safeenv", "patterns"),
+	)
+
+	// Detektor dasar: dotenv + regex bawaan + pola kustom pengguna.
+	detectors := []detector.Detector{
 		detector.NewDotEnv(), // .env* -> mask semua value (PRD §7)
 		detector.NewRegex(),  // pola kredensial dikenal (PRD §5.2)
-	)
+		customDet,            // pola kustom pengguna (hot-reload via config)
+	}
+
+	// Mode entropi OPT-IN (SAMAR_ENTROPY=1): jaring tambahan untuk secret
+	// "telanjang" berentropi tinggi yang tak punya kata-kunci. Nonaktif secara
+	// default karena berpotensi false-positive (hash, UUID, base64 data).
+	if getEnvWithFallback("SAMAR_ENTROPY", "SAFEENV_ENTROPY") == "1" {
+		detectors = append(detectors, detector.NewEntropy())
+		fmt.Fprintln(os.Stderr, "samar: MODE ENTROPI AKTIF — deteksi secret berentropi tinggi tanpa kata-kunci (bisa menambah false-positive).")
+	}
+
+	det := detector.NewRegistry(detectors...)
 	engine := masking.New(det, v)
 
 	// --- Jalur outbound (M1) ---
@@ -201,21 +234,24 @@ func run() error {
 
 	// Allowlist egress bertingkat: global (user config) + per-project (.samar).
 	// Mode strict (project mempersempit global) via SAMAR_STRICT_ALLOWLIST=1.
-	home, _ := os.UserHomeDir()
-	globalAllow := filepath.Join(home, ".samar", "allowlist")
+	globalAllow := filepath.Join(homeDir, ".samar", "allowlist")
 	projectAllow := filepath.Join(".samar", "allowlist")
 	strict := getEnvWithFallback("SAMAR_STRICT_ALLOWLIST", "SAFEENV_STRICT_ALLOWLIST") == "1"
-	al := allowlist.NewLayered(5*time.Second, strict, []string{globalAllow, filepath.Join(home, ".safeenv", "allowlist")}, []string{projectAllow, filepath.Join(".safeenv", "allowlist")})
+	al := allowlist.NewLayered(5*time.Second, strict, []string{globalAllow, filepath.Join(homeDir, ".safeenv", "allowlist")}, []string{projectAllow, filepath.Join(".safeenv", "allowlist")})
 
 	guard := &policyGuard{p: policy.New(al)}
 
 	// --- Audit log per sesi (PRD §10) ---
 	auditor := newAuditor()
 
-	// config_reload audit: dipicu saat file allowlist berubah & dimuat ulang.
+	// config_reload audit: dipicu saat file allowlist / pola kustom berubah
+	// & dimuat ulang.
 	if auditor != nil {
 		al.SetOnReload(func() {
 			auditor.Event("config_reload", "allowlist", "allow", "reloaded")
+		})
+		customDet.SetOnReload(func() {
+			auditor.Event("config_reload", "custom_patterns", "allow", "reloaded")
 		})
 	}
 
@@ -224,16 +260,22 @@ func run() error {
 		fmt.Fprintln(os.Stderr, "samar: KONFIRMASI MANUSIA NONAKTIF (default). Secret ke host yang SUDAH di allowlist dikirim tanpa prompt. Allowlist tetap memblokir host asing. Untuk lapisan konfirmasi: set SAMAR_REQUIRE_CONFIRM=elicit (butuh client yang mendukung MCP elicitation).")
 	}
 
+	// Safety-net runtime: verifikasi terakhir bahwa output tool tak membocorkan
+	// secret vault; secret yang bocor di-tokenisasi ulang (ditambal). Memakai
+	// vault yang sama (Secrets() + Tokenize). Selalu aktif (defense-in-depth).
+	safetyNet := leakscan.NewSafetyNet(v, v)
+
 	samarSrv, err := server.New(server.Deps{
-		Masker:   engine,
-		Files:    safeio.OSFileReader{},
-		Env:      safeio.OSEnvReader{},
-		Writer:   safeio.OSFileWriter{},
-		Runner:   safeio.OSCommandRunner{},
-		Restorer: rst,
-		Guard:    guard,
-		Audit:    auditor,
-		Confirm:  conf,
+		Masker:    engine,
+		Files:     safeio.OSFileReader{},
+		Env:       safeio.OSEnvReader{},
+		Writer:    safeio.OSFileWriter{},
+		Runner:    safeio.OSCommandRunner{},
+		Restorer:  rst,
+		Guard:     guard,
+		Audit:     auditor,
+		Confirm:   conf,
+		SafetyNet: safetyNet,
 	})
 	if err != nil {
 		return err

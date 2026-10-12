@@ -68,6 +68,20 @@ type Auditor interface {
 	Event(eventType, tool, decision, reason string)
 }
 
+// SafetyNet adalah verifikasi terakhir sebelum teks hasil tool dikirim ke LLM:
+// bila ada secret vault yang bocor mentah, ia di-tokenisasi ulang (ditambal).
+// Dipenuhi oleh *leakscan.SafetyNet. OPSIONAL: bila nil, server memakai no-op
+// (perilaku lama; masking normal tetap jalan).
+type SafetyNet interface {
+	// Scrub mengembalikan teks bersih dan jumlah kebocoran yang ditambal.
+	Scrub(text string) (string, int)
+}
+
+// nopSafetyNet adalah SafetyNet default yang meneruskan teks apa adanya.
+type nopSafetyNet struct{}
+
+func (nopSafetyNet) Scrub(text string) (string, int) { return text, 0 }
+
 // nopAuditor adalah Auditor default yang tidak melakukan apa-apa.
 type nopAuditor struct{}
 
@@ -77,15 +91,16 @@ func (nopAuditor) Event(_, _, _, _ string) {}
 // wajib; dependency outbound (Writer/Runner/Restorer/Guard) wajib untuk M1.
 // Audit & Confirm opsional (default no-op / auto-approve).
 type Deps struct {
-	Masker   Masker
-	Files    safeio.FileReader
-	Env      safeio.EnvReader
-	Writer   safeio.FileWriter
-	Runner   safeio.CommandRunner
-	Restorer Restorer
-	Guard    Guard
-	Audit    Auditor
-	Confirm  Confirmer
+	Masker    Masker
+	Files     safeio.FileReader
+	Env       safeio.EnvReader
+	Writer    safeio.FileWriter
+	Runner    safeio.CommandRunner
+	Restorer  Restorer
+	Guard     Guard
+	Audit     Auditor
+	Confirm   Confirmer
+	SafetyNet SafetyNet // opsional: verifikasi anti-bocor terakhir (default no-op)
 }
 
 // Samar memegang dependency terwiring dan mendaftarkan tool ke MCPServer.
@@ -110,7 +125,21 @@ func New(d Deps) (*Samar, error) {
 	if d.Confirm == nil {
 		d.Confirm = autoApproveConfirmer{}
 	}
+	if d.SafetyNet == nil {
+		d.SafetyNet = nopSafetyNet{}
+	}
 	return &Samar{deps: d}, nil
+}
+
+// safeText menerapkan safety-net sebagai verifikasi terakhir atas teks hasil
+// tool sebelum dikirim ke LLM. Bila ada kebocoran yang ditambal, dicatat ke
+// audit. Mengembalikan hasil tool teks yang sudah bersih.
+func (s *Samar) safeText(tool, text string) *mcp.CallToolResult {
+	clean, patched := s.deps.SafetyNet.Scrub(text)
+	if patched > 0 {
+		s.deps.Audit.Event("leak_patched", tool, "allow", "safety_net_retokenized")
+	}
+	return mcp.NewToolResultText(clean)
 }
 
 // Register memasang keempat tool Samar pada server MCP.
@@ -162,7 +191,7 @@ func (s *Samar) handleReadFile(_ context.Context, req mcp.CallToolRequest) (*mcp
 	}
 	res := s.deps.Masker.Mask(path, content)
 	s.deps.Audit.Event("read", "samar_read_file", "allow", "ok")
-	return mcp.NewToolResultText(res.Masked), nil
+	return s.safeText("samar_read_file", res.Masked), nil
 }
 
 // handleGetEnv mengimplementasikan tool samar_get_env. Value dimasking; NAMA
@@ -175,7 +204,7 @@ func (s *Samar) handleGetEnv(_ context.Context, req mcp.CallToolRequest) (*mcp.C
 		}
 		masked := s.deps.Masker.Mask(".env", name+"="+val)
 		s.deps.Audit.Event("read", "samar_get_env", "allow", "ok")
-		return mcp.NewToolResultText(masked.Masked), nil
+		return s.safeText("samar_get_env", masked.Masked), nil
 	}
 
 	// Seluruh environment: masking tiap value, output deterministik (urut nama).
@@ -194,7 +223,7 @@ func (s *Samar) handleGetEnv(_ context.Context, req mcp.CallToolRequest) (*mcp.C
 		b.WriteByte('\n')
 	}
 	s.deps.Audit.Event("read", "samar_get_env", "allow", "all_env")
-	return mcp.NewToolResultText(b.String()), nil
+	return s.safeText("samar_get_env", b.String()), nil
 }
 
 // handleWriteFile mengimplementasikan tool samar_write_file: restorasi token ->
@@ -278,7 +307,8 @@ func (s *Samar) handleExecuteCommand(ctx context.Context, req mcp.CallToolReques
 	// Keluaran perintah DI-MASK ULANG: output bisa berisi secret (mis. echo).
 	out := s.deps.Masker.Mask("", res.Stdout).Masked
 	errOut := s.deps.Masker.Mask("", res.Stderr).Masked
-	return mcp.NewToolResultText(fmt.Sprintf("exit=%d\n--- stdout ---\n%s\n--- stderr ---\n%s", res.ExitCode, out, errOut)), nil
+	combined := fmt.Sprintf("exit=%d\n--- stdout ---\n%s\n--- stderr ---\n%s", res.ExitCode, out, errOut)
+	return s.safeText("samar_execute_command", combined), nil
 }
 
 // commandHasToken true bila command mengandung minimal satu placeholder utuh.
