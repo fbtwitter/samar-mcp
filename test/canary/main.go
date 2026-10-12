@@ -270,6 +270,13 @@ func main() {
 	}
 	defer cleanupBin()
 
+	// Jadikan path binary ABSOLUT: setiap sesi menjalankan server dengan
+	// cwd = tempdir fixture (agar ./.samar/patterns per-project terbaca), jadi
+	// path relatif seperti "bin/samar" akan salah-resolve terhadap tempdir.
+	if abs, aerr := filepath.Abs(bin); aerr == nil {
+		bin = abs
+	}
+
 	dir, err := os.MkdirTemp("", "samar-canary-")
 	if err != nil {
 		fmt.Fprintln(os.Stderr, "canary: gagal buat tempdir:", err)
