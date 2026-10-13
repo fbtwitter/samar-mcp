@@ -176,6 +176,8 @@ ENVIRONMENT
   SAMAR_ENTROPY=1              Aktifkan deteksi entropi (OPT-IN): tangkap secret
                                berentropi tinggi tanpa kata-kunci. Default nonaktif
                                (bisa menambah false-positive pada hash/UUID/base64).
+  SAMAR_PII=1                  Aktifkan deteksi PII (OPT-IN): email, kartu kredit
+                               (Luhn), IBAN (mod-97), IPv4. Default nonaktif.
 
 POLA KUSTOM (detektor, jalur inbound)
   Global:      ~/.samar/patterns (fallback: ~/.safeenv/patterns)
@@ -224,6 +226,14 @@ func run() error {
 	if getEnvWithFallback("SAMAR_ENTROPY", "SAFEENV_ENTROPY") == "1" {
 		detectors = append(detectors, detector.NewEntropy())
 		fmt.Fprintln(os.Stderr, "samar: MODE ENTROPI AKTIF — deteksi secret berentropi tinggi tanpa kata-kunci (bisa menambah false-positive).")
+	}
+
+	// Mode PII OPT-IN (SAMAR_PII=1): deteksi data pribadi (email, kartu kredit
+	// via Luhn, IBAN via mod-97, IPv4). Nonaktif secara default karena PII lebih
+	// rentan false-positive; validasi struktural menekan sebagian besar.
+	if getEnvWithFallback("SAMAR_PII", "SAFEENV_PII") == "1" {
+		detectors = append(detectors, detector.NewPii())
+		fmt.Fprintln(os.Stderr, "samar: MODE PII AKTIF — deteksi email/kartu kredit/IBAN/IPv4 (bisa menambah false-positive).")
 	}
 
 	det := detector.NewRegistry(detectors...)

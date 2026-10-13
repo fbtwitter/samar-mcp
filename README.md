@@ -135,6 +135,7 @@ Without this step, built-in client tools can bypass Samar and read secrets direc
     internal_key:\s*(?P<secret>[A-Z0-9]{8,})
     ```
 - **Entropy detection (opt-in, `SAMAR_ENTROPY=1`):** an extra net for *bare* high-entropy tokens that carry no keyword (so Regex misses them) and live outside `.env` (so DotEnv misses them). Uses Shannon entropy over whitespace-delimited words, with conservative guards (length bounds, skips UUIDs, pure digits, natural-language words). **Off by default** because it can raise false positives on hashes/UUIDs/base64 blobs; enable it when you prioritize recall.
+- **PII detection (opt-in, `SAMAR_PII=1`):** catches personal data that isn't a technical secret — email addresses, credit-card numbers (validated with the Luhn algorithm), IBANs (validated with mod-97), and IPv4 addresses (octet-range checked). **Off by default** because PII patterns are more false-positive-prone; the structural validation (Luhn/mod-97/octet range) keeps most noise out.
 - **Runtime leak safety-net (always on):** a final verification before any tool result is returned to the LLM. It scans the output for any secret the vault already knows and, if one slipped through on a different path, **re-tokenizes it** using the same vault token (patching, not just failing). A patched leak is recorded in the audit log as `leak_patched`.
 
 ---
@@ -146,6 +147,7 @@ Without this step, built-in client tools can bypass Samar and read secrets direc
 | `SAMAR_STRICT_ALLOWLIST` | `1` / `0` | `0` (union) | When set to `1`, per-project allowlist narrows the global allowlist (`global ∩ project`). Default: union merge (`global ∪ project`). (Backward-compatible fallback: `SAFEENV_STRICT_ALLOWLIST`). |
 | `SAMAR_REQUIRE_CONFIRM` | `""`, `"off"`, `"elicit"`, `"deny"` | `""` (off) | Human-in-the-loop confirmation before outbound network calls containing unmasked secrets:<br>• `""` / `"off"`: auto-approve if destination host is in allowlist (warning logged to stderr).<br>• `"elicit"`: request interactive approval via MCP elicitation (fail-closed if client lacks support).<br>• `"deny"`: reject all network commands containing tokens.<br>(Backward-compatible fallback: `SAFEENV_REQUIRE_CONFIRM`). |
 | `SAMAR_ENTROPY` | `1` / `0` | `0` (off) | When `1`, enables opt-in Shannon-entropy detection of bare high-entropy tokens (no keyword, non-`.env`). May increase false positives on hashes/UUIDs/base64. (Backward-compatible fallback: `SAFEENV_ENTROPY`). |
+| `SAMAR_PII` | `1` / `0` | `0` (off) | When `1`, enables opt-in PII detection: email, credit card (Luhn), IBAN (mod-97), IPv4 (octet range). May increase false positives. (Backward-compatible fallback: `SAFEENV_PII`). |
 
 ---
 
@@ -157,7 +159,7 @@ Every component depends on **interfaces**, not concrete types; implementations a
 cmd/samar              composition root — sole dependency wiring location
 internal/vault         in-memory secret↔token storage (SRP)
 internal/idgen         TokenGenerator backed by crypto/rand
-internal/detector      Detector interface + Registry (ISP, OCP) + dotenv, regex, custom (hot-reload), entropy (opt-in)
+internal/detector      Detector interface + Registry (ISP, OCP) + dotenv, regex, custom (hot-reload), entropy & PII (opt-in)
 internal/masking       Masking Engine: detect→tokenize→replace, depends on abstractions (DIP)
 internal/restore       Restorer: token→secret, fail-closed on corrupt tokens (M1)
 internal/policy        Exfiltration & confused-deputy policy, fail-closed (M1)

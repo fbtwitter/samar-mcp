@@ -135,6 +135,7 @@ Tanpa itu, tool bawaan client dapat membaca secret tanpa lewat masking (PRD §5.
     internal_key:\s*(?P<secret>[A-Z0-9]{8,})
     ```
 - **Deteksi entropi (opt-in, `SAMAR_ENTROPY=1`):** jaring tambahan untuk token *telanjang* berentropi tinggi yang tak punya kata-kunci (lolos Regex) dan di luar `.env` (lolos DotEnv). Memakai entropi Shannon per-kata dengan penjaga konservatif (batas panjang, melewati UUID, angka murni, kata bahasa alami). **Nonaktif secara default** karena bisa menambah false-positive pada hash/UUID/base64; aktifkan bila Anda mengutamakan recall.
+- **Deteksi PII (opt-in, `SAMAR_PII=1`):** menangkap data pribadi yang bukan secret teknis — alamat email, nomor kartu kredit (divalidasi Luhn), IBAN (divalidasi mod-97), dan alamat IPv4 (rentang oktet dicek). **Nonaktif secara default** karena pola PII lebih rentan false-positive; validasi struktural (Luhn/mod-97/rentang oktet) menyaring sebagian besar noise.
 - **Safety-net anti-bocor runtime (selalu aktif):** verifikasi terakhir sebelum hasil tool dikirim ke LLM. Ia memindai output atas secret yang sudah diketahui vault; bila ada yang lolos lewat jalur lain, secret itu **di-tokenisasi ulang** dengan token vault yang sama (menambal, bukan sekadar gagal). Kebocoran yang ditambal dicatat di audit sebagai `leak_patched`.
 
 ---
@@ -146,6 +147,7 @@ Tanpa itu, tool bawaan client dapat membaca secret tanpa lewat masking (PRD §5.
 | `SAMAR_STRICT_ALLOWLIST` | `1` / `0` | `0` (union) | Jika `1`, egress allowlist per-project mempersempit global (`global ∩ project`). Default: penggabungan (`global ∪ project`). (Dukungan mundur: `SAFEENV_STRICT_ALLOWLIST`). |
 | `SAMAR_REQUIRE_CONFIRM` | `""`, `"off"`, `"elicit"`, `"deny"` | `""` (off) | Kontrol konfirmasi manusia saat perintah jaringan mengirim secret:<br>• `""` / `"off"`: auto-approve jika host terdaftar di allowlist (peringatan dicetak ke stderr).<br>• `"elicit"`: minta persetujuan interaktif via MCP elicitation (fail-closed bila tidak didukung client).<br>• `"deny"`: selalu tolak aksi jaringan bertoken.<br>(Dukungan mundur: `SAFEENV_REQUIRE_CONFIRM`). |
 | `SAMAR_ENTROPY` | `1` / `0` | `0` (off) | Jika `1`, aktifkan deteksi entropi Shannon (opt-in) untuk token telanjang berentropi tinggi (tanpa kata-kunci, non-`.env`). Bisa menambah false-positive pada hash/UUID/base64. (Dukungan mundur: `SAFEENV_ENTROPY`). |
+| `SAMAR_PII` | `1` / `0` | `0` (off) | Jika `1`, aktifkan deteksi PII (opt-in): email, kartu kredit (Luhn), IBAN (mod-97), IPv4 (rentang oktet). Bisa menambah false-positive. (Dukungan mundur: `SAFEENV_PII`). |
 
 ---
 
@@ -158,7 +160,7 @@ dirakit hanya di `cmd/samar/main.go`.
 cmd/samar              composition root — wiring satu-satunya
 internal/vault         penyimpanan secret↔token in-memory (SRP)
 internal/idgen         TokenGenerator berbasis crypto/rand
-internal/detector      Detector interface + Registry (ISP, OCP) + dotenv, regex, custom (hot-reload), entropi (opt-in)
+internal/detector      Detector interface + Registry (ISP, OCP) + dotenv, regex, custom (hot-reload), entropi & PII (opt-in)
 internal/masking       Engine: detect→tokenize→replace, bergantung abstraksi (DIP)
 internal/restore       Restorer: token→secret, fail-closed pada token korup (M1)
 internal/policy        Policy exfiltration/confused-deputy, fail-closed (M1)

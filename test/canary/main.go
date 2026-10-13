@@ -41,6 +41,7 @@ type fixture struct {
 	canary      string
 	expectLeak  bool   // true: fixture ini DIHARAPKAN tak terlindungi (batas desain)
 	entropyOnly bool   // true: hanya diuji di sesi entropi (SAMAR_ENTROPY=1)
+	piiOnly     bool   // true: hanya diuji di sesi PII (SAMAR_PII=1)
 	note        string
 }
 
@@ -118,6 +119,16 @@ func fixtures(dir string) []fixture {
 			entropyOnly: true,
 			note:        "mode entropi (SAMAR_ENTROPY=1): token acak tanpa kata-kunci terdeteksi",
 		},
+		{
+			// PII (email) di teks biasa — tak tertangkap detektor bawaan/kustom.
+			// Diuji HANYA di sesi PII (SAMAR_PII=1) sehingga harus PROTECTED di
+			// sana. Membuktikan jalur PII end-to-end lewat MCP stdio.
+			name: "pii_email", filename: "contact.txt",
+			content: "owner: " + piiCanary + "\n",
+			canary:  piiCanary,
+			piiOnly: true,
+			note:    "mode PII (SAMAR_PII=1): email terdeteksi walau tanpa kata-kunci",
+		},
 	}
 }
 
@@ -133,6 +144,11 @@ const customPatternFile = "# canary harness: token deploy organisasi\nACME-[0-9]
 // huruf-besar/kecil/angka) tanpa prefix kata-kunci — sengaja TIDAK cocok pola
 // bawaan/kustom apa pun, sehingga hanya mode entropi yang menangkapnya.
 const entropyCanary = "9fK2mZ7qTx4bV8nR1wL6cD3eH0sA5uJp"
+
+// piiCanary adalah email unik yang berperan sebagai penanda PII. Email adalah
+// PII sejati (terdeteksi detektor Pii) namun tak tertangkap detektor bawaan,
+// sehingga hanya sesi PII yang memproteksinya.
+const piiCanary = "canary.user.7f3a9c21@example-canary.com"
 
 type rpcResp struct {
 	ID     int `json:"id"`
@@ -314,15 +330,20 @@ func main() {
 		os.Exit(2)
 	}
 
-	// Pisahkan fixture baseline (sesi default) dari fixture khusus-entropi.
-	var baseFixtures, entropyFixtures []fixture
+	// Pisahkan fixture baseline dari fixture khusus-entropi dan khusus-PII.
+	var baseFixtures, entropyFixtures, piiFixtures []fixture
 	baseFileSet := map[string]struct{}{}
 	entropyFileSet := map[string]struct{}{}
+	piiFileSet := map[string]struct{}{}
 	for _, f := range fxs {
-		if f.entropyOnly {
+		switch {
+		case f.entropyOnly:
 			entropyFixtures = append(entropyFixtures, f)
 			entropyFileSet[f.filename] = struct{}{}
-		} else {
+		case f.piiOnly:
+			piiFixtures = append(piiFixtures, f)
+			piiFileSet[f.filename] = struct{}{}
+		default:
 			baseFixtures = append(baseFixtures, f)
 			baseFileSet[f.filename] = struct{}{}
 		}
@@ -363,6 +384,21 @@ func main() {
 			os.Exit(2)
 		}
 		p, el, ul := eval(entropyFixtures, resp2)
+		protected += p
+		expectedLeaks += el
+		unexpectedLeaks += ul
+	}
+
+	// --- Sesi 3: mode PII (SAMAR_PII=1) ---
+	if len(piiFixtures) > 0 {
+		fmt.Println("--- Sesi PII (SAMAR_PII=1) ---")
+		piiFiles := keysOf(piiFileSet)
+		resp3, err := readSession(bin, dir, piiFiles, []string{"SAMAR_PII=1"})
+		if err != nil {
+			fmt.Fprintln(os.Stderr, "canary:", err)
+			os.Exit(2)
+		}
+		p, el, ul := eval(piiFixtures, resp3)
 		protected += p
 		expectedLeaks += el
 		unexpectedLeaks += ul
