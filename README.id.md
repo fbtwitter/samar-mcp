@@ -104,8 +104,10 @@ pwsh scripts/build-release.ps1   # output + checksum di dist/
 Template config siap pakai di [`docs/clients/`](./docs/clients/): `kiro.mcp.json`,
 `cursor.mcp.json`, `claude.mcp.json`, dan `allowlist.example`. Ganti `/ABS/PATH`
 dengan path binary, lalu terapkan **deny-selektif tool bawaan pada file sensitif**
-(`.env`, `*.pem`, dsb.) — [`docs/CLIENT_CONFIG.md`](./docs/CLIENT_CONFIG.md).
+(`.env`, `*.pem`, dsb.) — [`docs/CLIENT_CONFIG.id.md`](./docs/CLIENT_CONFIG.id.md).
 Tanpa itu, tool bawaan client dapat membaca secret tanpa lewat masking (PRD §5.5).
+
+**Pengguna Kiro:** ikuti panduan langkah demi langkah di [`docs/KIRO_SETUP.id.md`](./docs/KIRO_SETUP.id.md).
 
 ---
 
@@ -220,7 +222,7 @@ Harness melaporkan per-fixture `PROTECTED` / `EXPECTED-LEAK` (batas desain) /
 `UNEXPECTED-LEAK`. **Catatan:** ini membuktikan masking pada jalur yang MELEWATI
 Samar (Lapis 1) — bukan bahwa client tak bisa membaca file lewat tool
 bawaannya (Lapis 2 / bypass). Untuk menguji bypass di client nyata, ikuti
-[`docs/BYPASS_TEST.md`](./docs/BYPASS_TEST.md) (prosedur canary manual per client).
+[`docs/BYPASS_TEST.id.md`](./docs/BYPASS_TEST.id.md) (prosedur canary manual per client).
 
 ---
 
@@ -267,7 +269,7 @@ Jika menjalankan dari hasil build lokal atau direktori kustom:
 }
 ```
 
-> **Syarat Mutlak:** Terapkan **deny-selektif pada tool bawaan client untuk file sensitif** (`.env`, `*.pem`, dsb.) — lihat panduan [`docs/CLIENT_CONFIG.md`](./docs/CLIENT_CONFIG.md). Tanpa langkah ini, tool bawaan client dapat membaca secret langsung tanpa masking (PRD §5.5). Template konfigurasi siap pakai per client tersedia di [`docs/clients/`](./docs/clients/).
+> **Syarat Mutlak:** Terapkan **deny-selektif pada tool bawaan client untuk file sensitif** (`.env`, `*.pem`, dsb.) — lihat panduan [`docs/CLIENT_CONFIG.id.md`](./docs/CLIENT_CONFIG.id.md). Tanpa langkah ini, tool bawaan client dapat membaca secret langsung tanpa masking (PRD §5.5). Template konfigurasi siap pakai per client tersedia di [`docs/clients/`](./docs/clients/).
 
 ---
 
@@ -290,7 +292,7 @@ Samar menerapkan prinsip **fail-closed**. Jika model AI memotong token (misal `_
 <details>
 <summary><b>Mengapa AI masih bisa membaca nilai asli di file .env saya?</b></summary>
 
-Pastikan Anda telah menerapkan **deny-selektif** pada tool bawaan client AI (seperti `fs_read` atau `Read`). Jika client memanggil tool baca bawaannya, konten dibaca langsung tanpa melewati Samar. Lihat panduan lengkap di [`docs/CLIENT_CONFIG.md`](./docs/CLIENT_CONFIG.md).
+Pastikan Anda telah menerapkan **deny-selektif** pada tool bawaan client AI (seperti `fs_read` atau `Read`). Jika client memanggil tool baca bawaannya, konten dibaca langsung tanpa melewati Samar. Lihat panduan lengkap di [`docs/CLIENT_CONFIG.id.md`](./docs/CLIENT_CONFIG.id.md).
 </details>
 
 <details>

@@ -1,71 +1,76 @@
-# Konfigurasi Client — Penutupan Jalur Bypass (PRD §5.5 / §13.1)
+# Client Configuration — Closing the Bypass Path (PRD §5.5 / §13.1)
 
-> **Syarat mutlak, bukan opsional.** Jaminan keamanan Samar **batal** jika
-> client AI masih bisa membaca file / menjalankan perintah lewat tool bawaannya.
-> Jika LLM memanggil `fs_read`/`execute_bash` bawaan alih-alih tool Samar,
-> secret tidak pernah melewati masking engine dan bocor apa adanya.
+**English** | [Bahasa Indonesia](./CLIENT_CONFIG.id.md)
 
-Tujuan: pastikan **semua** I/O file & shell melewati tool Samar
-(`samar_read_file`, `samar_get_env`), dan tool I/O **bawaan** client dinonaktifkan.
+> **A hard requirement, not optional.** Samar's security guarantee is **void** if
+> the AI client can still read files / run commands through its built-in tools.
+> If the LLM calls the built-in `fs_read`/`execute_bash` instead of Samar's tools,
+> secrets never pass through the masking engine and leak as-is.
 
-## Prinsip
+Goal: ensure **all** file & shell I/O goes through Samar's tools
+(`samar_read_file`, `samar_get_env`), and the client's **built-in** I/O tools are
+disabled.
 
-| Jalur | Status yang diinginkan |
+## Principle
+
+| Path | Desired state |
 | --- | --- |
-| `samar_read_file`, `samar_get_env`, `samar_write_file`, `samar_execute_command` (Samar) | **AKTIF** |
-| Tool baca bawaan (`fs_read`/`Read`) pada file sensitif | **DENY** (paksa lewat Samar) |
-| Tool tulis bawaan (`fs_write`/`Write`/`Edit`) pada file sensitif | **DENY** |
-| Tool exec bawaan (`shell`/`Bash`/`execute_bash`) | **DENY/Supervised** (arahkan ke `samar_execute_command`) |
+| `samar_read_file`, `samar_get_env`, `samar_write_file`, `samar_execute_command` (Samar) | **ACTIVE** |
+| Built-in read tool (`fs_read`/`Read`) on sensitive files | **DENY** (force through Samar) |
+| Built-in write tool (`fs_write`/`Write`/`Edit`) on sensitive files | **DENY** |
+| Built-in exec tool (`shell`/`Bash`/`execute_bash`) | **DENY/Supervised** (route to `samar_execute_command`) |
 
-## Registrasi server Samar (lokasi file terverifikasi, Okt 2026)
+## Registering the Samar server (file locations verified Oct 2026)
 
-Build dulu: `go build -o bin/samar ./cmd/samar`. Template siap pakai ada di
+Build first: `go build -o bin/samar ./cmd/samar`. Ready-to-use templates live in
 `docs/clients/` (`kiro.mcp.json`, `cursor.mcp.json`, `claude.mcp.json`).
 
-| Client | Lokasi config | Field disable/approve | Env syntax |
+| Client | Config location | Disable/approve field | Env syntax |
 | --- | --- | --- | --- |
-| **Kiro** | `.kiro/settings/mcp.json` (workspace) atau `~/.kiro/settings/mcp.json` (user) | `disabled`, `autoApprove`, `disabledTools` | `${VAR}` |
-| **Cursor** | `.cursor/mcp.json` (project) atau `~/.cursor/mcp.json` (global) | tidak ada (atur di UI Settings) | `${env:VAR}` |
-| **Claude Code** | `~/.claude/settings.json` → `mcpServers` | tidak ada (permission settings) | `${env:VAR}` |
+| **Kiro** | `.kiro/settings/mcp.json` (workspace) or `~/.kiro/settings/mcp.json` (user) | `disabled`, `autoApprove`, `disabledTools` | `${VAR}` |
+| **Cursor** | `.cursor/mcp.json` (project) or `~/.cursor/mcp.json` (global) | none (configure in UI Settings) | `${env:VAR}` |
+| **Claude Code** | `~/.claude/settings.json` → `mcpServers` | none (permission settings) | `${env:VAR}` |
 
-Shape dasar sama di ketiganya: `mcpServers.<nama>.{command,args,env}`.
+The base shape is the same across all three: `mcpServers.<name>.{command,args,env}`.
 
-### Menonaktifkan / membatasi tool bawaan — langkah per client
+### Disabling / restricting built-in tools — per-client steps
 
-Mekanisme berbeda per client (terverifikasi Okt 2026). Catatan realistis:
-men-**deny total** `fs_read`/Read akan melumpuhkan agen (tak bisa baca kode).
-Pendekatan praktis: **deny tool bawaan khusus untuk file/jalur sensitif**
-(`.env`, `*.pem`, `*.key`, dir secret) sehingga agen terpaksa memakai Samar
-untuk itu, lalu arahkan eksekusi lewat `samar_execute_command`. Untuk isolasi
-penuh (deny semua baca/tulis/exec bawaan), lakukan hanya bila agen memang hanya
-boleh ber-I/O lewat Samar.
+The mechanism differs per client (verified Oct 2026). A realistic note:
+**fully denying** `fs_read`/Read will cripple the agent (it can't read code).
+The practical approach: **deny built-in tools specifically for sensitive
+files/paths** (`.env`, `*.pem`, `*.key`, secret dirs) so the agent is forced to
+use Samar for those, then route execution through `samar_execute_command`. For
+full isolation (deny all built-in read/write/exec), only do it if the agent is
+truly meant to do I/O exclusively through Samar.
 
 #### Kiro — `permissions.yaml` (deny-overrides)
 
-Lokasi: `~/.kiro/settings/permissions.yaml` (user) atau workspace-scope.
-`deny` selalu menang atas `allow`. Capability: `fs_read`, `fs_write`, `shell`.
+Location: `~/.kiro/settings/permissions.yaml` (user) or workspace-scope.
+`deny` always wins over `allow`. Capabilities: `fs_read`, `fs_write`, `shell`.
 
 ```yaml
 rules:
-  # Tutup jalur bawaan ke file sensitif -> paksa lewat Samar.
+  # Close the built-in path to sensitive files -> force through Samar.
   - capability: fs_read
     match: ["**/.env", "**/.env.*", "**/*.pem", "**/*.key", "secrets/**"]
     effect: deny
   - capability: fs_write
     match: ["**/.env", "**/.env.*", "**/*.pem", "**/*.key", "secrets/**"]
     effect: deny
-  # Isolasi penuh (opsional, agresif): matikan shell bawaan sepenuhnya.
+  # Full isolation (optional, aggressive): disable the built-in shell entirely.
   # - capability: shell
     # effect: deny
 ```
 
-Tambahan: set **Settings → Agent → Agent Autonomy = Supervised** agar aksi
-bawaan tetap minta konfirmasi. Field MCP `disabledTools` TIDAK mematikan tool
-bawaan Kiro — itu hanya untuk tool server MCP.
+Also: set **Settings → Agent → Agent Autonomy = Supervised** so built-in actions
+still prompt for confirmation. The MCP `disabledTools` field does NOT disable
+Kiro's built-in tools — it only applies to MCP server tools.
+
+See also the dedicated step-by-step guide: [`KIRO_SETUP.md`](./KIRO_SETUP.md).
 
 #### Claude Code — `~/.claude/settings.json` (`permissions.deny`)
 
-`deny` → `ask` → `allow`; `deny` adalah hard gate (tanpa prompt/override).
+`deny` → `ask` → `allow`; `deny` is a hard gate (no prompt/override).
 
 ```json
 {
@@ -78,41 +83,42 @@ bawaan Kiro — itu hanya untuk tool server MCP.
 }
 ```
 
-Untuk isolasi penuh, tambahkan `"Bash(*)"` ke `deny` (agresif: mematikan semua
-shell bawaan; pastikan `samar_execute_command` menutupi kebutuhan eksekusi).
+For full isolation, add `"Bash(*)"` to `deny` (aggressive: disables all built-in
+shell; make sure `samar_execute_command` covers your execution needs).
 
 #### Cursor — UI Settings
 
-Cursor tidak punya field file untuk menonaktifkan tool bawaan. Buka
-**Settings → (Features/Tools / Agent)** dan matikan tool filesystem/terminal
-bawaan di sana. Verifikasi dengan langkah "Verifikasi cepat" di bawah.
+Cursor has no config file field to disable built-in tools. Open
+**Settings → (Features/Tools / Agent)** and turn off the built-in
+filesystem/terminal tools there. Verify with the "Quick verification" steps below.
 
-> **Jika client tidak menyediakan mekanisme deny yang memadai:** Samar tetap
-> berjalan tetapi model keamanan turun jadi *best-effort + disclosure* (server
-> mencetak peringatan ke stderr). Perlakukan sebagai belum aman untuk secret
-> produksi sampai jalur bawaan ke file sensitif benar-benar tertutup.
+> **If a client offers no adequate deny mechanism:** Samar still runs, but the
+> security model drops to *best-effort + disclosure* (the server prints a warning
+> to stderr). Treat it as not yet safe for production secrets until the built-in
+> path to sensitive files is genuinely closed.
 
-## Verifikasi cepat
+## Quick verification
 
-1. Jalankan server; pastikan peringatan keamanan muncul di stderr.
-2. Minta AI membaca sebuah file `.env` uji berisi secret palsu.
-3. Konfirmasi output berisi token `__SAMAR_SECRET_XXXX__`, **bukan** nilai asli.
-4. Coba minta AI membaca file yang sama **tanpa** menyebut tool Samar. Jika
-   nilai asli muncul, berarti tool bawaan masih aktif → tutup jalur itu.
+1. Run the server; confirm the security warning appears on stderr.
+2. Ask the AI to read a test `.env` file containing a fake secret.
+3. Confirm the output contains a `__SAMAR_SECRET_XXXX__` token, **not** the real
+   value.
+4. Try asking the AI to read the same file **without** naming a Samar tool. If
+   the real value appears, the built-in tool is still active → close that path.
 
-## Egress allowlist (jalur outbound)
+## Egress allowlist (outbound path)
 
-`samar_execute_command` memblokir pengiriman secret ke host eksternal yang tidak
-ada di allowlist (PRD §5.6). Daftar host (satu per baris, `#` komentar) dibaca
-dari dua lokasi dan di-reload otomatis tanpa restart:
+`samar_execute_command` blocks sending secrets to external hosts not on the
+allowlist (PRD §5.6). The host list (one per line, `#` for comments) is read from
+two locations and reloaded automatically with no restart:
 
 - **Global:** `~/.samar/allowlist` (fallback: `~/.safeenv/allowlist`)
-- **Per-project:** `.samar/allowlist` (fallback: `.safeenv/allowlist`) di root project
+- **Per-project:** `.samar/allowlist` (fallback: `.safeenv/allowlist`) at the project root
 
-### Mode resolusi (§13.3)
+### Resolution modes (§13.3)
 
 - **Union (default):** `effective = global ∪ per-project`.
-- **Strict:** set env `SAMAR_STRICT_ALLOWLIST=1`. Per-project **mempersempit**
-  global → `effective = global ∩ per-project`. Bila file project kosong/absen,
-  strict jatuh ke global apa adanya. Gunakan strict untuk proyek yang hanya
-  boleh menghubungi subset host tepercaya organisasi.
+- **Strict:** set env `SAMAR_STRICT_ALLOWLIST=1`. Per-project **narrows** the
+  global → `effective = global ∩ per-project`. If the project file is empty/absent,
+  strict falls back to the global list as-is. Use strict for projects that may
+  only contact a subset of trusted organizational hosts.

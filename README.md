@@ -107,6 +107,8 @@ Replace `/ABS/PATH` with your binary path, then apply **selective-deny on built-
 (`.env`, `*.pem`, etc.) — see [`docs/CLIENT_CONFIG.md`](./docs/CLIENT_CONFIG.md).
 Without this step, built-in client tools can bypass Samar and read secrets directly (PRD §5.5).
 
+**Kiro users:** follow the dedicated step-by-step guide in [`docs/KIRO_SETUP.md`](./docs/KIRO_SETUP.md).
+
 ---
 
 ## ✨ Features
