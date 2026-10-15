@@ -28,9 +28,10 @@ Build dulu: `go build -o bin/samar ./cmd/samar`. Template siap pakai ada di
 | --- | --- | --- | --- |
 | **Kiro** | `.kiro/settings/mcp.json` (workspace) atau `~/.kiro/settings/mcp.json` (user) | `disabled`, `autoApprove`, `disabledTools` | `${VAR}` |
 | **Cursor** | `.cursor/mcp.json` (project) atau `~/.cursor/mcp.json` (global) | tidak ada (atur di UI Settings) | `${env:VAR}` |
-| **Claude Code** | `~/.claude/settings.json` → `mcpServers` | tidak ada (permission settings) | `${env:VAR}` |
+| **Claude Code** | `~/.claude.json` (via `claude mcp add`) atau `.mcp.json` (project) | `permissions.deny`, `hooks.PreToolUse` | `${env:VAR}` |
+| **Claude Desktop** | `claude_desktop_config.json` → `mcpServers` | tidak ada | tidak ada |
 
-Shape dasar sama di ketiganya: `mcpServers.<nama>.{command,args,env}`.
+Shape dasar sama di seluruh client: `mcpServers.<nama>.{command,args,env}`. Perhatikan bahwa **Claude Code** (CLI) tidak membaca `mcpServers` dari `~/.claude/settings.json`; daftarkan memakai perintah `claude mcp add` atau file root `.mcp.json`.
 
 ### Menonaktifkan / membatasi tool bawaan — langkah per client
 
@@ -65,23 +66,47 @@ Tambahan: set **Settings → Agent → Agent Autonomy = Supervised** agar aksi
 bawaan tetap minta konfirmasi. Field MCP `disabledTools` TIDAK mematikan tool
 bawaan Kiro — itu hanya untuk tool server MCP.
 
-#### Claude Code — `~/.claude/settings.json` (`permissions.deny`)
+#### Claude Code — Pengamanan Otomatis & Manual
 
-`deny` → `ask` → `allow`; `deny` adalah hard gate (tanpa prompt/override).
+##### ⚡ Setup Otomatis 1 Perintah (Direkomendasikan)
+Jalankan perintah setup bawaan Samar yang idempoten:
+```bash
+samar setup claude-code
+```
+Perintah ini otomatis mendaftarkan server MCP, mengonfigurasi aturan deny rekursif (`**/`), memasang hook pencegah bypass Bash (`~/.claude/hooks/guard-secrets.py`), dan menambahkan instruksi perutean agen ke `~/.claude/CLAUDE.md`.
 
+##### 🛠️ Pengamanan Manual (Menutup Celah Bypass Bash)
+Claude Code memerlukan tiga lapisan sinkron untuk mencegah agen membypass tool Samar:
+
+1. **Aturan Glob Deny** (`~/.claude/settings.json`): Gunakan glob `**/` agar file `.env` di subfolder (misal `packages/api/.env`) ikut terlindungi:
 ```json
 {
   "permissions": {
     "deny": [
-      "Read(./.env)", "Read(./.env.*)", "Read(./**/*.pem)", "Read(./**/*.key)",
-      "Edit(./.env)", "Write(./.env)"
+      "Read(**/.env)", "Read(**/.env.*)", "Read(**/*.pem)", "Read(**/*.key)",
+      "Edit(**/.env)", "Edit(**/.env.*)", "Write(**/.env)", "Write(**/.env.*)"
     ]
   }
 }
 ```
 
-Untuk isolasi penuh, tambahkan `"Bash(*)"` ke `deny` (agresif: mematikan semua
-shell bawaan; pastikan `samar_execute_command` menutupi kebutuhan eksekusi).
+2. **Hook PreToolUse untuk Bash** (`guard-secrets.py`):
+Ketika `Read` di-deny, model AI cenderung beralih memakai tool `Bash` bawaan (`cat .env`, `grep KEY .env`, `source .env`). Daftarkan hook PreToolUse di `settings.json` yang mencegat perintah shell menyentuh file secret dan mengarahkannya kembali ke Samar:
+```json
+"hooks": {
+  "PreToolUse": [
+    {
+      "matcher": "Bash",
+      "hooks": [{ "type": "command", "command": "python3 $HOME/.claude/hooks/guard-secrets.py", "timeout": 10 }]
+    }
+  ]
+}
+```
+
+3. **Instruksi Pengarah Agen** (`~/.claude/CLAUDE.md`):
+Menginstruksikan Claude Code dan subagent untuk secara proaktif memilih tool `mcp__samar__*` setiap kali berinteraksi dengan file kredensial.
+
+Template lengkap tersedia di folder [`docs/clients/claude/`](./clients/claude/).
 
 #### Cursor — UI Settings
 

@@ -29,9 +29,10 @@ Build first: `go build -o bin/samar ./cmd/samar`. Ready-to-use templates live in
 | --- | --- | --- | --- |
 | **Kiro** | `.kiro/settings/mcp.json` (workspace) or `~/.kiro/settings/mcp.json` (user) | `disabled`, `autoApprove`, `disabledTools` | `${VAR}` |
 | **Cursor** | `.cursor/mcp.json` (project) or `~/.cursor/mcp.json` (global) | none (configure in UI Settings) | `${env:VAR}` |
-| **Claude Code** | `~/.claude/settings.json` → `mcpServers` | none (permission settings) | `${env:VAR}` |
+| **Claude Code** | `~/.claude.json` (via `claude mcp add`) or `.mcp.json` (project) | `permissions.deny`, `hooks.PreToolUse` | `${env:VAR}` |
+| **Claude Desktop** | `claude_desktop_config.json` → `mcpServers` | none | none |
 
-The base shape is the same across all three: `mcpServers.<name>.{command,args,env}`.
+The base shape is the same across all clients: `mcpServers.<name>.{command,args,env}`. Note that **Claude Code** (CLI) does not read `mcpServers` from `~/.claude/settings.json`; register it using `claude mcp add` or a project `.mcp.json`.
 
 ### Disabling / restricting built-in tools — per-client steps
 
@@ -68,23 +69,47 @@ Kiro's built-in tools — it only applies to MCP server tools.
 
 See also the dedicated step-by-step guide: [`KIRO_SETUP.md`](./KIRO_SETUP.md).
 
-#### Claude Code — `~/.claude/settings.json` (`permissions.deny`)
+#### Claude Code — Automated & Manual Hardening
 
-`deny` → `ask` → `allow`; `deny` is a hard gate (no prompt/override).
+##### ⚡ 1-Step Automated Setup (Recommended)
+Run Samar's built-in idempotent setup command:
+```bash
+samar setup claude-code
+```
+This registers the server, configures recursive glob deny rules, installs the Bash secret guard hook (`~/.claude/hooks/guard-secrets.py`), and appends routing rules to `~/.claude/CLAUDE.md`.
 
+##### 🛠️ Manual Hardening (Closing the Bash Bypass)
+Claude Code requires three synchronized layers to prevent built-in tool bypasses:
+
+1. **Glob Deny Rules** (`~/.claude/settings.json`): Use `**/` globs so nested `.env` files (e.g. `packages/api/.env`) are covered:
 ```json
 {
   "permissions": {
     "deny": [
-      "Read(./.env)", "Read(./.env.*)", "Read(./**/*.pem)", "Read(./**/*.key)",
-      "Edit(./.env)", "Write(./.env)"
+      "Read(**/.env)", "Read(**/.env.*)", "Read(**/*.pem)", "Read(**/*.key)",
+      "Edit(**/.env)", "Edit(**/.env.*)", "Write(**/.env)", "Write(**/.env.*)"
     ]
   }
 }
 ```
 
-For full isolation, add `"Bash(*)"` to `deny` (aggressive: disables all built-in
-shell; make sure `samar_execute_command` covers your execution needs).
+2. **PreToolUse Hook for Bash** (`guard-secrets.py`):
+When `Read` is denied, agents often fallback to built-in `Bash` (`cat .env`, `grep KEY .env`, `source .env`). Register a PreToolUse hook in `settings.json` that catches shell commands accessing secret files and redirects the agent to Samar tools:
+```json
+"hooks": {
+  "PreToolUse": [
+    {
+      "matcher": "Bash",
+      "hooks": [{ "type": "command", "command": "python3 $HOME/.claude/hooks/guard-secrets.py", "timeout": 10 }]
+    }
+  ]
+}
+```
+
+3. **Steering Instructions** (`~/.claude/CLAUDE.md`):
+Instructs the agent and subagents to proactively select `mcp__samar__*` tools for any credentialed files.
+
+Ready-to-use template files are available in [`docs/clients/claude/`](./clients/claude/).
 
 #### Cursor — UI Settings
 

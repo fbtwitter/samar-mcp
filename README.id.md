@@ -228,7 +228,13 @@ bawaannya (Lapis 2 / bypass). Untuk menguji bypass di client nyata, ikuti
 
 ## 🚀 Pemakaian
 
-Tambahkan Samar ke konfigurasi MCP IDE/Client Anda (misalnya `~/.gemini/config/mcp_config.json`, `.kiro/settings/mcp.json`, `.cursor/mcp.json`, atau Claude Desktop `claude_desktop_config.json`):
+#### ⚡ Setup Otomatis 1 Perintah untuk Claude Code
+Bagi pengguna **Claude Code**, jalankan perintah bawaan Samar untuk mendaftarkan server MCP, mengonfigurasi aturan glob deny, memasang hook guard, dan menambahkan instruksi agen secara instan:
+```bash
+samar setup claude-code
+```
+
+Untuk client lain, tambahkan Samar ke konfigurasi MCP IDE/Client Anda (misalnya `~/.gemini/config/mcp_config.json`, `.kiro/settings/mcp.json`, `.cursor/mcp.json`, atau Claude Desktop `claude_desktop_config.json`):
 
 #### Opsi 1: Otomatis via `go run` (Tanpa Instalasi Manual)
 Menjalankan Samar secara on-the-fly langsung dari repositori GitHub:

@@ -221,7 +221,13 @@ The harness reports `PROTECTED` / `EXPECTED-LEAK` (design limits) / `UNEXPECTED-
 
 ## 🚀 Usage
 
-Add Samar to your IDE/Client MCP configuration (e.g., `~/.gemini/config/mcp_config.json`, `.kiro/settings/mcp.json`, `.cursor/mcp.json`, or Claude Desktop `claude_desktop_config.json`):
+#### ⚡ Automated 1-Step Setup for Claude Code
+For **Claude Code**, run Samar's built-in command to register the MCP server, configure recursive glob deny rules, install the secret-guard hook, and append agent instructions in one step:
+```bash
+samar setup claude-code
+```
+
+For other clients, add Samar to your IDE/Client MCP configuration (e.g., `~/.gemini/config/mcp_config.json`, `.kiro/settings/mcp.json`, `.cursor/mcp.json`, or Claude Desktop `claude_desktop_config.json`):
 
 #### Option 1: Automatic via `go run` (Zero Installation)
 Runs Samar on-the-fly directly from the GitHub repository:

@@ -1,0 +1,11 @@
+{
+  "mcpServers": {
+    "samar": {
+      "command": "samar",
+      "args": [],
+      "env": {
+        "SAMAR_STRICT_ALLOWLIST": "0"
+      }
+    }
+  }
+}

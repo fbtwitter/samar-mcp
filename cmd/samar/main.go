@@ -136,14 +136,30 @@ func (a *auditAdapter) Event(eventType, tool, decision, reason string) {
 }
 
 func main() {
-	for _, a := range os.Args[1:] {
-		switch a {
+	if len(os.Args) > 1 {
+		switch os.Args[1] {
 		case "--version", "-v", "version":
 			fmt.Println("samar", version)
 			return
 		case "--help", "-h", "help":
 			printHelp()
 			return
+		case "setup":
+			targetClient := ""
+			if len(os.Args) > 2 {
+				targetClient = os.Args[2]
+			}
+			switch targetClient {
+			case "claude-code", "claude":
+				if err := runSetupClaudeCode("", ""); err != nil {
+					fmt.Fprintln(os.Stderr, "samar setup: error:", err)
+					os.Exit(1)
+				}
+				return
+			default:
+				fmt.Println("Pemakaian: samar setup claude-code")
+				os.Exit(1)
+			}
 		}
 	}
 	if err := run(); err != nil {
@@ -160,9 +176,10 @@ Server Model Context Protocol (stdio) yang memasking kredensial sebelum
 mencapai LLM (inbound) dan merestorasinya di bawah policy keamanan (outbound).
 
 PEMAKAIAN
-  samar                 Jalankan server MCP di stdio (mode normal).
-  samar --version       Cetak versi.
-  samar --help          Cetak bantuan ini.
+  samar                    Jalankan server MCP di stdio (mode normal).
+  samar setup claude-code  Setup otomatis integrasi Claude Code (deny rules, hook, CLAUDE.md).
+  samar --version          Cetak versi.
+  samar --help             Cetak bantuan ini.
 
 ENVIRONMENT
   SAMAR_STRICT_ALLOWLIST=1     Egress allowlist strict: per-project mempersempit
