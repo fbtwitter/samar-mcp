@@ -74,40 +74,88 @@ flowchart TD
 
 ---
 
-## 📦 Instalasi
+## 🚀 Panduan Cepat & Instalasi
 
-**Via `go install` (Direkomendasikan):**
+Dapatkan proteksi privasi dalam kurang dari 2 menit:
+
+### 1. Pasang Samar
+Pilih salah satu metode berikut:
+
+- **Via `go install` (Direkomendasikan):**
+  ```bash
+  go install github.com/hanifalkauni/samar-mcp/cmd/samar@latest
+  ```
+- **Binary Siap Pakai:** Unduh binary untuk Windows, macOS, atau Linux dari [GitHub Releases](https://github.com/hanifalkauni/samar-mcp/releases/latest) (cek `SHA256SUMS.txt` untuk verifikasi), lalu letakkan di dalam `PATH` sistem Anda.
+- **Tanpa Instalasi (`go run`):** Jalankan setup atau server langsung tanpa install binary:
+  ```bash
+  go run github.com/hanifalkauni/samar-mcp/cmd/samar@latest setup all
+  ```
+
+### 2. Setup Otomatis 1 Perintah untuk Agent / IDE Anda
+Jalankan perintah setup bawaan Samar yang idempoten untuk mendaftarkan server MCP, memasang aturan deny, dan mengonfigurasi panduan agen secara otomatis:
+
 ```bash
-go install github.com/hanifalkauni/samar-mcp/cmd/samar@latest
+samar setup claude-code   # Claude Code: settings.json deny rules, guard hook, CLAUDE.md
+samar setup kiro          # Kiro IDE: mcp.json, permissions.yaml deny rules, steering
+samar setup cursor        # Cursor IDE: mcp.json, .cursorrules & samar.mdc
+samar setup antigravity   # Antigravity/Gemini: mcp_config.json, rules/samar.md
+samar setup all           # Setup semua client yang terdeteksi sekaligus
 ```
 
-**Dari rilis:** unduh binary untuk OS/arch Anda dari `dist/` atau GitHub Releases (lihat
-`SHA256SUMS.txt` untuk verifikasi), taruh di PATH, beri nama `samar`.
-
-**Dari sumber:**
-```bash
-git clone https://github.com/hanifalkauni/samar-mcp.git
-cd samar-mcp
-go build -o samar ./cmd/samar
-./samar --version
-```
-
-**Build rilis multi-platform** (linux/darwin/windows, amd64/arm64):
-```powershell
-pwsh scripts/build-release.ps1   # output + checksum di dist/
-```
+### 3. Verifikasi Cepat (Uji Proteksi)
+Pastikan asisten AI Anda tidak dapat lagi membaca secret mentah:
+1. Buat file `.env` tiruan di workspace Anda:
+   ```bash
+   echo "TEST_SECRET=my_dummy_secret_token_123" > .env
+   ```
+2. Pada agen AI Anda (Claude Code, Cursor, Kiro, atau Antigravity), tanyakan:
+   > *"Baca file .env dan sebutkan nilai secret-nya"*
+3. **Verifikasi:** Agen akan menampilkan token tersamar seperti `__SAMAR_SECRET_1__`, bukan nilai rahasia `my_dummy_secret_token_123`!
 
 ---
 
-## 🔌 Setup Client
+## 🔌 Konfigurasi Manual Client (Alternatif)
 
-Template config siap pakai di [`docs/clients/`](./docs/clients/): `kiro.mcp.json`,
-`cursor.mcp.json`, `claude.mcp.json`, dan `allowlist.example`. Ganti `/ABS/PATH`
-dengan path binary, lalu terapkan **deny-selektif tool bawaan pada file sensitif**
-(`.env`, `*.pem`, dsb.) — [`docs/CLIENT_CONFIG.id.md`](./docs/CLIENT_CONFIG.id.md).
-Tanpa itu, tool bawaan client dapat membaca secret tanpa lewat masking (PRD §5.5).
+Jika Anda ingin melakukan konfigurasi manual atau menggunakan client tanpa setup otomatis (misalnya Claude Desktop), gunakan template siap pakai di folder [`docs/clients/`](./docs/clients/) (`kiro.mcp.json`, `cursor.mcp.json`, `claude.mcp.json`, `allowlist.example`).
 
-**Pengguna Kiro:** ikuti panduan langkah demi langkah di [`docs/KIRO_SETUP.id.md`](./docs/KIRO_SETUP.id.md).
+#### Opsi 1: Otomatis via `go run` (Tanpa Instalasi Manual)
+Menjalankan Samar secara on-the-fly langsung dari repositori GitHub:
+```json
+{
+  "mcpServers": {
+    "samar": {
+      "command": "go",
+      "args": ["run", "github.com/hanifalkauni/samar-mcp/cmd/samar@latest"]
+    }
+  }
+}
+```
+
+#### Opsi 2: Binary Terpasang di PATH
+```json
+{
+  "mcpServers": {
+    "samar": {
+      "command": "samar",
+      "args": []
+    }
+  }
+}
+```
+
+#### Opsi 3: Path Binary Lokal
+```json
+{
+  "mcpServers": {
+    "samar": {
+      "command": "/path/to/samar",
+      "args": []
+    }
+  }
+}
+```
+
+> **Syarat Mutlak Konfigurasi Manual:** Terapkan **deny-selektif pada tool bawaan client untuk file sensitif** (`.env`, `*.pem`, dsb.) — lihat panduan [`docs/CLIENT_CONFIG.id.md`](./docs/CLIENT_CONFIG.id.md). Tanpa langkah ini, tool bawaan client dapat membaca secret langsung tanpa masking (PRD §5.5). Panduan khusus Kiro: [`docs/KIRO_SETUP.id.md`](./docs/KIRO_SETUP.id.md).
 
 ---
 
@@ -224,64 +272,6 @@ Harness melaporkan per-fixture `PROTECTED` / `EXPECTED-LEAK` (batas desain) /
 Samar (Lapis 1) — bukan bahwa client tak bisa membaca file lewat tool
 bawaannya (Lapis 2 / bypass). Untuk menguji bypass di client nyata, ikuti
 [`docs/BYPASS_TEST.id.md`](./docs/BYPASS_TEST.id.md) (prosedur canary manual per client).
-
----
-
-## 🚀 Pemakaian
-
-#### ⚡ Setup Otomatis 1 Perintah untuk Berbagai AI Agent & IDE
-Samar menyediakan perintah setup otomatis untuk mendaftarkan server MCP, memasang aturan deny (pada client yang mendukung), dan memasang aturan pengalihan agen (*steering rules*) dalam satu langkah:
-
-```bash
-samar setup claude-code   # Claude Code: settings.json deny rules, guard hook, CLAUDE.md
-samar setup kiro          # Kiro IDE: mcp.json, permissions.yaml deny rules, steering
-samar setup cursor        # Cursor IDE: mcp.json, .cursorrules & samar.mdc
-samar setup antigravity   # Antigravity/Gemini: mcp_config.json, rules/samar.md
-samar setup all           # Setup semua client yang terdeteksi sekaligus
-```
-
-Untuk konfigurasi manual atau client lain, tambahkan Samar ke konfigurasi MCP IDE/Client Anda (misalnya `~/.gemini/config/mcp_config.json`, `.kiro/settings/mcp.json`, `.cursor/mcp.json`, atau Claude Desktop `claude_desktop_config.json`):
-
-#### Opsi 1: Otomatis via `go run` (Tanpa Instalasi Manual)
-Menjalankan Samar secara on-the-fly langsung dari repositori GitHub:
-```json
-{
-  "mcpServers": {
-    "samar": {
-      "command": "go",
-      "args": ["run", "github.com/hanifalkauni/samar-mcp/cmd/samar@latest"]
-    }
-  }
-}
-```
-
-#### Opsi 2: Binary Terpasang di PATH
-Jika Anda sudah memasang Samar via `go install` atau meletakkan binary di PATH sistem:
-```json
-{
-  "mcpServers": {
-    "samar": {
-      "command": "samar",
-      "args": []
-    }
-  }
-}
-```
-
-#### Opsi 3: Path Binary Lokal
-Jika menjalankan dari hasil build lokal atau direktori kustom:
-```json
-{
-  "mcpServers": {
-    "samar": {
-      "command": "/path/to/samar",
-      "args": []
-    }
-  }
-}
-```
-
-> **Syarat Mutlak:** Terapkan **deny-selektif pada tool bawaan client untuk file sensitif** (`.env`, `*.pem`, dsb.) — lihat panduan [`docs/CLIENT_CONFIG.id.md`](./docs/CLIENT_CONFIG.id.md). Tanpa langkah ini, tool bawaan client dapat membaca secret langsung tanpa masking (PRD §5.5). Template konfigurasi siap pakai per client tersedia di [`docs/clients/`](./docs/clients/).
 
 ---
 

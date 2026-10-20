@@ -74,40 +74,88 @@ flowchart TD
 
 ---
 
-## 📦 Installation
+## 🚀 Quickstart & Installation
 
-**Via `go install` (Recommended):**
+Get protected in under 2 minutes:
+
+### 1. Install Samar
+Choose one method:
+
+- **Via `go install` (Recommended):**
+  ```bash
+  go install github.com/hanifalkauni/samar-mcp/cmd/samar@latest
+  ```
+- **Pre-built Binary:** Download the executable for Linux, macOS, or Windows from [GitHub Releases](https://github.com/hanifalkauni/samar-mcp/releases/latest) (refer to `SHA256SUMS.txt` for verification) and place it in your `PATH`.
+- **Zero Installation (`go run`):** Run setup or start the server directly without installing:
+  ```bash
+  go run github.com/hanifalkauni/samar-mcp/cmd/samar@latest setup all
+  ```
+
+### 2. Automated 1-Step Setup for your AI Agent / IDE
+Run Samar's built-in idempotent setup command to automatically register the MCP server, install file deny rules, and configure agent steering:
+
 ```bash
-go install github.com/hanifalkauni/samar-mcp/cmd/samar@latest
+samar setup claude-code   # Claude Code: settings.json deny rules, guard hook, CLAUDE.md
+samar setup kiro          # Kiro IDE: mcp.json, permissions.yaml deny rules, steering
+samar setup cursor        # Cursor IDE: mcp.json, .cursorrules & samar.mdc
+samar setup antigravity   # Antigravity/Gemini: mcp_config.json, rules/samar.md
+samar setup all           # Setup all supported AI clients in one command
 ```
 
-**From release:** download the binary for your OS/architecture from `dist/` or GitHub Releases (refer to
-`SHA256SUMS.txt` for verification), place it in your `PATH`, and name it `samar`.
-
-**From source:**
-```bash
-git clone https://github.com/hanifalkauni/samar-mcp.git
-cd samar-mcp
-go build -o samar ./cmd/samar
-./samar --version
-```
-
-**Build multi-platform releases** (linux/darwin/windows, amd64/arm64):
-```powershell
-pwsh scripts/build-release.ps1   # outputs and checksums in dist/
-```
+### 3. Verify Protection (Quick Test)
+Ensure your AI client cannot read raw secrets:
+1. Create a dummy test `.env` file in your workspace:
+   ```bash
+   echo "TEST_SECRET=my_dummy_secret_token_123" > .env
+   ```
+2. In your AI agent (Claude Code, Cursor, Kiro, Antigravity), ask:
+   > *"Read .env and tell me the secret"*
+3. **Verify:** The agent outputs a masked token like `__SAMAR_SECRET_1__` instead of `my_dummy_secret_token_123`!
 
 ---
 
-## 🔌 Client Setup
+## 🔌 Manual Client Configuration (Alternative)
 
-Ready-to-use configuration templates are provided in [`docs/clients/`](./docs/clients/):
-`kiro.mcp.json`, `cursor.mcp.json`, `claude.mcp.json`, and `allowlist.example`.
-Replace `/ABS/PATH` with your binary path, then apply **selective-deny on built-in tools for sensitive files**
-(`.env`, `*.pem`, etc.) — see [`docs/CLIENT_CONFIG.md`](./docs/CLIENT_CONFIG.md).
-Without this step, built-in client tools can bypass Samar and read secrets directly (PRD §5.5).
+If you prefer to configure your client manually or use clients without automated setup (e.g., Claude Desktop), use the ready-to-use templates in [`docs/clients/`](./docs/clients/) (`kiro.mcp.json`, `cursor.mcp.json`, `claude.mcp.json`, `allowlist.example`).
 
-**Kiro users:** follow the dedicated step-by-step guide in [`docs/KIRO_SETUP.md`](./docs/KIRO_SETUP.md).
+#### Option 1: On-the-fly via `go run` (Zero Installation)
+Runs Samar on-the-fly directly from the GitHub repository:
+```json
+{
+  "mcpServers": {
+    "samar": {
+      "command": "go",
+      "args": ["run", "github.com/hanifalkauni/samar-mcp/cmd/samar@latest"]
+    }
+  }
+}
+```
+
+#### Option 2: Pre-installed Binary (in PATH)
+```json
+{
+  "mcpServers": {
+    "samar": {
+      "command": "samar",
+      "args": []
+    }
+  }
+}
+```
+
+#### Option 3: Local Binary Path
+```json
+{
+  "mcpServers": {
+    "samar": {
+      "command": "/path/to/samar",
+      "args": []
+    }
+  }
+}
+```
+
+> **Crucial Requirement for Manual Setup:** Enforce **selective-deny on built-in tools for sensitive files** (`.env`, `*.pem`, etc.) — see [`docs/CLIENT_CONFIG.md`](./docs/CLIENT_CONFIG.md). Without this step, client built-in tools can bypass Samar and read secrets directly (PRD §5.5). Dedicated step-by-step guide for Kiro: [`docs/KIRO_SETUP.md`](./docs/KIRO_SETUP.md).
 
 ---
 
@@ -217,64 +265,6 @@ go build -o bin/samar ./cmd/samar
 go run ./test/canary        # exit 0 = no unexpected leaks
 ```
 The harness reports `PROTECTED` / `EXPECTED-LEAK` (design limits) / `UNEXPECTED-LEAK` per fixture. **Note:** this validates masking on requests that PASS THROUGH Samar (Layer 1) — not that the client cannot read files using its built-in tools (Layer 2 / bypass). To test bypass prevention on actual clients, follow [`docs/BYPASS_TEST.md`](./docs/BYPASS_TEST.md).
-
----
-
-## 🚀 Usage
-
-#### ⚡ Automated 1-Step Setup for AI Agents & IDEs
-Samar includes built-in automated setup commands that register the MCP server, install deny rules (where supported), and configure agent steering rules in one step:
-
-```bash
-samar setup claude-code   # Claude Code: settings.json deny rules, guard hook, CLAUDE.md
-samar setup kiro          # Kiro IDE: mcp.json, permissions.yaml deny rules, steering
-samar setup cursor        # Cursor IDE: mcp.json, .cursorrules & samar.mdc
-samar setup antigravity   # Antigravity/Gemini: mcp_config.json, rules/samar.md
-samar setup all           # Setup all supported AI clients in one command
-```
-
-For manual configurations or other clients, add Samar to your IDE/Client MCP configuration (e.g., `~/.gemini/config/mcp_config.json`, `.kiro/settings/mcp.json`, `.cursor/mcp.json`, or Claude Desktop `claude_desktop_config.json`):
-
-#### Option 1: Automatic via `go run` (Zero Installation)
-Runs Samar on-the-fly directly from the GitHub repository:
-```json
-{
-  "mcpServers": {
-    "samar": {
-      "command": "go",
-      "args": ["run", "github.com/hanifalkauni/samar-mcp/cmd/samar@latest"]
-    }
-  }
-}
-```
-
-#### Option 2: Pre-installed Binary (in PATH)
-If you installed Samar via `go install` or placed the binary in your PATH:
-```json
-{
-  "mcpServers": {
-    "samar": {
-      "command": "samar",
-      "args": []
-    }
-  }
-}
-```
-
-#### Option 3: Local Binary Path
-If running from a local build or custom directory:
-```json
-{
-  "mcpServers": {
-    "samar": {
-      "command": "/path/to/samar",
-      "args": []
-    }
-  }
-}
-```
-
-> **Crucial Requirement:** Enforce **selective-deny on built-in tools for sensitive files** (`.env`, `*.pem`, etc.) — see [`docs/CLIENT_CONFIG.md`](./docs/CLIENT_CONFIG.md). Without this step, client built-in tools can bypass Samar and read secrets directly (PRD §5.5). Ready-to-use templates for specific clients are available in [`docs/clients/`](./docs/clients/).
 
 ---
 
