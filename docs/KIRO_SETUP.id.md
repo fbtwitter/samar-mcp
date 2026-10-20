@@ -26,6 +26,8 @@ Langkah 2 harus manual: Kiro sengaja **melarang agen AI menulis file
 permission-nya sendiri** (`~/.kiro/settings/` dan `~/.kiro/workspace-roots/`).
 Ini guardrail yang benar — agen tidak boleh mengubah batas izinnya sendiri.
 
+> ⚡ **Cara Tercepat:** Jalankan `samar setup kiro` dari terminal Anda (di luar agen) untuk mengotomasi Langkah 1 (`mcp.json`), Langkah 2 (`permissions.yaml`), dan instruksi agen dalam satu langkah!
+
 ---
 
 ## Prasyarat

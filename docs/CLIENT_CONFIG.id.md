@@ -45,6 +45,15 @@ boleh ber-I/O lewat Samar.
 
 #### Kiro — `permissions.yaml` (deny-overrides)
 
+##### ⚡ Setup Otomatis 1 Perintah (Direkomendasikan)
+Jalankan perintah setup bawaan Samar yang idempoten:
+```bash
+samar setup kiro
+```
+Perintah ini otomatis mendaftarkan server Samar di `~/.kiro/settings/mcp.json`, memasang aturan deny di `~/.kiro/settings/permissions.yaml`, dan menambahkan panduan pengalihan agen ke `~/.kiro/steering/samar.md`.
+
+##### 🛠️ Pengamanan Manual
+
 Lokasi: `~/.kiro/settings/permissions.yaml` (user) atau workspace-scope.
 `deny` selalu menang atas `allow`. Capability: `fs_read`, `fs_write`, `shell`.
 
@@ -108,11 +117,28 @@ Menginstruksikan Claude Code dan subagent untuk secara proaktif memilih tool `mc
 
 Template lengkap tersedia di folder [`docs/clients/claude/`](./clients/claude/).
 
-#### Cursor — UI Settings
+#### Cursor — Setup Otomatis & UI Settings
 
+##### ⚡ Setup Otomatis 1 Perintah
+Jalankan perintah setup bawaan Samar yang idempoten:
+```bash
+samar setup cursor
+```
+Perintah ini otomatis mendaftarkan Samar di `~/.cursor/mcp.json` serta memasang aturan pengarah agen di `~/.cursor/rules/samar.mdc` dan `~/.cursorrules`.
+
+##### 🛠️ Pengaturan UI Manual
 Cursor tidak punya field file untuk menonaktifkan tool bawaan. Buka
 **Settings → (Features/Tools / Agent)** dan matikan tool filesystem/terminal
 bawaan di sana. Verifikasi dengan langkah "Verifikasi cepat" di bawah.
+
+#### Google Antigravity (Gemini) — Setup Otomatis
+
+##### ⚡ Setup Otomatis 1 Perintah
+Jalankan perintah setup bawaan Samar yang idempoten:
+```bash
+samar setup antigravity
+```
+Perintah ini otomatis mendaftarkan Samar di `~/.gemini/config/mcp_config.json` dan memasang aturan privasi agen di `~/.gemini/config/rules/samar.md`.
 
 > **Jika client tidak menyediakan mekanisme deny yang memadai:** Samar tetap
 > berjalan tetapi model keamanan turun jadi *best-effort + disclosure* (server

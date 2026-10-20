@@ -27,6 +27,8 @@ own permission files** (`~/.kiro/settings/` and `~/.kiro/workspace-roots/`). Thi
 is the right guardrail — an agent must not be able to rewrite its own permission
 boundaries.
 
+> ⚡ **Quickest way:** Run `samar setup kiro` from your terminal outside the agent to automate Step 1 (`mcp.json`), Step 2 (`permissions.yaml`), and agent steering in one command!
+
 ---
 
 ## Prerequisites

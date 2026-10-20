@@ -229,13 +229,18 @@ bawaannya (Lapis 2 / bypass). Untuk menguji bypass di client nyata, ikuti
 
 ## 🚀 Pemakaian
 
-#### ⚡ Setup Otomatis 1 Perintah untuk Claude Code
-Bagi pengguna **Claude Code**, jalankan perintah bawaan Samar untuk mendaftarkan server MCP, mengonfigurasi aturan glob deny, memasang hook guard, dan menambahkan instruksi agen secara instan:
+#### ⚡ Setup Otomatis 1 Perintah untuk Berbagai AI Agent & IDE
+Samar menyediakan perintah setup otomatis untuk mendaftarkan server MCP, memasang aturan deny (pada client yang mendukung), dan memasang aturan pengalihan agen (*steering rules*) dalam satu langkah:
+
 ```bash
-samar setup claude-code
+samar setup claude-code   # Claude Code: settings.json deny rules, guard hook, CLAUDE.md
+samar setup kiro          # Kiro IDE: mcp.json, permissions.yaml deny rules, steering
+samar setup cursor        # Cursor IDE: mcp.json, .cursorrules & samar.mdc
+samar setup antigravity   # Antigravity/Gemini: mcp_config.json, rules/samar.md
+samar setup all           # Setup semua client yang terdeteksi sekaligus
 ```
 
-Untuk client lain, tambahkan Samar ke konfigurasi MCP IDE/Client Anda (misalnya `~/.gemini/config/mcp_config.json`, `.kiro/settings/mcp.json`, `.cursor/mcp.json`, atau Claude Desktop `claude_desktop_config.json`):
+Untuk konfigurasi manual atau client lain, tambahkan Samar ke konfigurasi MCP IDE/Client Anda (misalnya `~/.gemini/config/mcp_config.json`, `.kiro/settings/mcp.json`, `.cursor/mcp.json`, atau Claude Desktop `claude_desktop_config.json`):
 
 #### Opsi 1: Otomatis via `go run` (Tanpa Instalasi Manual)
 Menjalankan Samar secara on-the-fly langsung dari repositori GitHub:

@@ -46,6 +46,15 @@ truly meant to do I/O exclusively through Samar.
 
 #### Kiro — `permissions.yaml` (deny-overrides)
 
+##### ⚡ 1-Step Automated Setup (Recommended)
+Run Samar's built-in idempotent setup command:
+```bash
+samar setup kiro
+```
+This automatically registers Samar in `~/.kiro/settings/mcp.json`, writes the deny rules to `~/.kiro/settings/permissions.yaml`, and creates agent steering instructions in `~/.kiro/steering/samar.md`.
+
+##### 🛠️ Manual Hardening
+
 Location: `~/.kiro/settings/permissions.yaml` (user) or workspace-scope.
 `deny` always wins over `allow`. Capabilities: `fs_read`, `fs_write`, `shell`.
 
@@ -111,11 +120,28 @@ Instructs the agent and subagents to proactively select `mcp__samar__*` tools fo
 
 Ready-to-use template files are available in [`docs/clients/claude/`](./clients/claude/).
 
-#### Cursor — UI Settings
+#### Cursor — Automated & UI Settings
 
+##### ⚡ 1-Step Automated Setup
+Run Samar's built-in idempotent setup command:
+```bash
+samar setup cursor
+```
+This automatically registers Samar in `~/.cursor/mcp.json` and installs steering rules in `~/.cursor/rules/samar.mdc` and `~/.cursorrules`.
+
+##### 🛠️ Manual UI Settings
 Cursor has no config file field to disable built-in tools. Open
 **Settings → (Features/Tools / Agent)** and turn off the built-in
 filesystem/terminal tools there. Verify with the "Quick verification" steps below.
+
+#### Google Antigravity (Gemini) — Automated Setup
+
+##### ⚡ 1-Step Automated Setup
+Run Samar's built-in idempotent setup command:
+```bash
+samar setup antigravity
+```
+This automatically registers Samar in `~/.gemini/config/mcp_config.json` and installs privacy steering rules in `~/.gemini/config/rules/samar.md`.
 
 > **If a client offers no adequate deny mechanism:** Samar still runs, but the
 > security model drops to *best-effort + disclosure* (the server prints a warning

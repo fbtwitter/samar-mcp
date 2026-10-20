@@ -145,12 +145,43 @@ func main() {
 			switch targetClient {
 			case "claude-code", "claude":
 				if err := runSetupClaudeCode("", ""); err != nil {
-					fmt.Fprintln(os.Stderr, "samar setup: error:", err)
+					fmt.Fprintln(os.Stderr, "samar setup claude-code: error:", err)
+					os.Exit(1)
+				}
+				return
+			case "kiro":
+				if err := runSetupKiro("", ""); err != nil {
+					fmt.Fprintln(os.Stderr, "samar setup kiro: error:", err)
+					os.Exit(1)
+				}
+				return
+			case "cursor":
+				if err := runSetupCursor("", ""); err != nil {
+					fmt.Fprintln(os.Stderr, "samar setup cursor: error:", err)
+					os.Exit(1)
+				}
+				return
+			case "antigravity", "gemini", "agy":
+				if err := runSetupAntigravity("", ""); err != nil {
+					fmt.Fprintln(os.Stderr, "samar setup antigravity: error:", err)
+					os.Exit(1)
+				}
+				return
+			case "all":
+				if err := runSetupAll(""); err != nil {
+					fmt.Fprintln(os.Stderr, "samar setup all: error:", err)
 					os.Exit(1)
 				}
 				return
 			default:
-				fmt.Println("Pemakaian: samar setup claude-code")
+				fmt.Println(`Pemakaian: samar setup <target>
+
+Target yang didukung:
+  claude-code   Setup otomatis Claude Code (settings.json deny rules, guard hook, CLAUDE.md)
+  kiro          Setup otomatis Kiro IDE (mcp.json, permissions.yaml deny rules, steering)
+  cursor        Setup otomatis Cursor IDE (mcp.json, .cursorrules / samar.mdc)
+  antigravity   Setup otomatis Antigravity / Gemini (mcp_config.json, rules/samar.md)
+  all           Setup seluruh client yang didukung sekaligus`)
 				os.Exit(1)
 			}
 		}
@@ -170,7 +201,12 @@ mencapai LLM (inbound) dan merestorasinya di bawah policy keamanan (outbound).
 
 PEMAKAIAN
   samar                    Jalankan server MCP di stdio (mode normal).
-  samar setup claude-code  Setup otomatis integrasi Claude Code (deny rules, hook, CLAUDE.md).
+  samar setup <target>     Setup otomatis integrasi client MCP:
+                             claude-code (deny rules, hook, CLAUDE.md)
+                             kiro        (mcp.json, permissions.yaml deny rules, steering)
+                             cursor      (mcp.json, .cursorrules / samar.mdc)
+                             antigravity (mcp_config.json, rules/samar.md)
+                             all         (seluruh client di atas)
   samar --version          Cetak versi.
   samar --help             Cetak bantuan ini.
 
