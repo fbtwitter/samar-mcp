@@ -35,7 +35,7 @@ Siapkan binary `samar`. Pilih salah satu:
 - **Pakai rilis Windows yang sudah ada:**
   ```powershell
   Copy-Item .\dist\safeenv-windows-amd64.exe .\dist\samar.exe -Force
-  .\dist\samar.exe --version   # harus mencetak versi, mis. "safeenv 1.1.0"
+  .\dist\samar.exe --version   # harus mencetak versi, mis. "samar 1.2.0"
   ```
 - **Build dari source:**
   ```powershell

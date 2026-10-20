@@ -36,7 +36,7 @@ Prepare the `samar` binary. Pick one:
 - **Use the existing Windows release:**
   ```powershell
   Copy-Item .\dist\safeenv-windows-amd64.exe .\dist\samar.exe -Force
-  .\dist\samar.exe --version   # should print a version, e.g. "safeenv 1.1.0"
+  .\dist\samar.exe --version   # should print a version, e.g. "samar 1.2.0"
   ```
 - **Build from source:**
   ```powershell

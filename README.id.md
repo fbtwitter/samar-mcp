@@ -12,7 +12,7 @@
 
 Privacy & security middleware untuk Model Context Protocol (MCP). Samar mencegat dan menyamarkan (*masking*) kredensial sensitif (API key, password, private key, URL database, dan variabel `.env`) sebelum masuk ke konteks LLM (*inbound*), menggantikannya dengan token reversibel deterministik berbasis *ephemeral vault* di memori (*zero-persistence*). Operasi *outbound* (penulisan file dan eksekusi perintah shell) memulihkan token kembali ke nilai aslinya secara aman di bawah pengawasan *egress allowlist* dan kebijakan *fail-closed*.
 
-> **Versi: v1.1.0** — Middleware privasi dan keamanan siap produksi dengan fitur *masking* kredensial *inbound*, restorasi *outbound fail-closed*, proteksi *egress* jaringan, konfirmasi *human-in-the-loop* (`off`, `elicit`, `deny`), dan log audit kriptografis HMAC.
+> **Versi: v1.2.0** — Middleware privasi dan keamanan siap produksi dengan fitur *masking* kredensial *inbound*, restorasi *outbound fail-closed*, proteksi *egress* jaringan, konfirmasi *human-in-the-loop* (`off`, `elicit`, `deny`), dan log audit kriptografis HMAC.
 
 ---
 
