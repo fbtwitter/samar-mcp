@@ -244,7 +244,7 @@ Fase berikutnya: `safe_write_file`, `safe_execute_command`, dan policy exfiltrat
 Audit log mencatat **kejadian keamanan**, bukan nilai secret. Prinsip: *catat metadata, jangan pernah plaintext*.
 
 * **Format:** JSON Lines (JSONL) — satu event per baris, append-only, mudah di-grep/stream/parse.
-* **Lokasi:** file lokal per sesi, mis. `.safeenv/audit/<session_id>.jsonl`. **Bukan** stdout (stdout dipakai transport MCP stdio).
+* **Lokasi (v1.1.0):** file lokal per sesi di direktori home pengguna `~/.samar/audit/<project-slug>-<hash8>/<session_id>.jsonl` untuk menjaga repositori tetap bersih (override via `SAMAR_AUDIT_DIR`). File dan direktori dibuat secara *lazy* saat event pertama dicatat. **Bukan** stdout (stdout dipakai transport MCP stdio).
 
 ### Skema Event
 ```json

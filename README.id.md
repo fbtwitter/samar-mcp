@@ -146,6 +146,7 @@ Tanpa itu, tool bawaan client dapat membaca secret tanpa lewat masking (PRD §5.
 
 | Variabel | Opsi / Nilai | Default | Deskripsi |
 | :--- | :--- | :--- | :--- |
+| `SAMAR_AUDIT_DIR` | Path direktori | `~/.samar/audit/<project-slug>-<hash8>/` | Direktori log audit kustom (override). File dan direktori dibuat secara *lazy* saat event pertama ditulis (sesi idle tidak membuat file kosong). (Dukungan mundur: `SAFEENV_AUDIT_DIR`). |
 | `SAMAR_STRICT_ALLOWLIST` | `1` / `0` | `0` (union) | Jika `1`, egress allowlist per-project mempersempit global (`global ∩ project`). Default: penggabungan (`global ∪ project`). (Dukungan mundur: `SAFEENV_STRICT_ALLOWLIST`). |
 | `SAMAR_REQUIRE_CONFIRM` | `""`, `"off"`, `"elicit"`, `"deny"` | `""` (off) | Kontrol konfirmasi manusia saat perintah jaringan mengirim secret:<br>• `""` / `"off"`: auto-approve jika host terdaftar di allowlist (peringatan dicetak ke stderr).<br>• `"elicit"`: minta persetujuan interaktif via MCP elicitation (fail-closed bila tidak didukung client).<br>• `"deny"`: selalu tolak aksi jaringan bertoken.<br>(Dukungan mundur: `SAFEENV_REQUIRE_CONFIRM`). |
 | `SAMAR_ENTROPY` | `1` / `0` | `0` (off) | Jika `1`, aktifkan deteksi entropi Shannon (opt-in) untuk token telanjang berentropi tinggi (tanpa kata-kunci, non-`.env`). Bisa menambah false-positive pada hash/UUID/base64. (Dukungan mundur: `SAFEENV_ENTROPY`). |
@@ -310,7 +311,7 @@ Tidak. Samar mengimplementasikan *lazy reload* otomatis (interval 5 detik berdas
 <details>
 <summary><b>Apakah secret asli ikut dicatat ke dalam log audit?</b></summary>
 
-Tidak. Log audit disimpan di `.samar/audit/<timestamp>.jsonl` dengan HMAC/hash-chain anti-tamper. Log ini hanya mencatat metadata event (tipe event, nama tool, keputusan policy, alasan, dan aktor), tidak pernah mencatat secret mentah.
+Tidak. Log audit disimpan di `~/.samar/audit/<project-slug>-<hash8>/<timestamp>.jsonl` (atau direktori kustom via `SAMAR_AUDIT_DIR`) dengan HMAC/hash-chain anti-tamper. File dan folder dibuat secara *lazy* hanya saat ada event audit, sehingga tidak mengotori repositori proyek. Log ini hanya mencatat metadata event (tipe event, nama tool, keputusan policy, alasan, dan aktor), tidak pernah mencatat secret mentah.
 </details>
 
 ## 🤝 Kontribusi & Keamanan

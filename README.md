@@ -146,6 +146,7 @@ Without this step, built-in client tools can bypass Samar and read secrets direc
 
 | Variable | Values / Options | Default | Description |
 | :--- | :--- | :--- | :--- |
+| `SAMAR_AUDIT_DIR` | Directory path | `~/.samar/audit/<project-slug>-<hash8>/` | Custom audit log directory. Files and directories are created lazily upon the first logged event (idle sessions produce 0 files). (Backward-compatible fallback: `SAFEENV_AUDIT_DIR`). |
 | `SAMAR_STRICT_ALLOWLIST` | `1` / `0` | `0` (union) | When set to `1`, per-project allowlist narrows the global allowlist (`global ∩ project`). Default: union merge (`global ∪ project`). (Backward-compatible fallback: `SAFEENV_STRICT_ALLOWLIST`). |
 | `SAMAR_REQUIRE_CONFIRM` | `""`, `"off"`, `"elicit"`, `"deny"` | `""` (off) | Human-in-the-loop confirmation before outbound network calls containing unmasked secrets:<br>• `""` / `"off"`: auto-approve if destination host is in allowlist (warning logged to stderr).<br>• `"elicit"`: request interactive approval via MCP elicitation (fail-closed if client lacks support).<br>• `"deny"`: reject all network commands containing tokens.<br>(Backward-compatible fallback: `SAFEENV_REQUIRE_CONFIRM`). |
 | `SAMAR_ENTROPY` | `1` / `0` | `0` (off) | When `1`, enables opt-in Shannon-entropy detection of bare high-entropy tokens (no keyword, non-`.env`). May increase false positives on hashes/UUIDs/base64. (Backward-compatible fallback: `SAFEENV_ENTROPY`). |
@@ -303,7 +304,7 @@ No. Samar utilizes automatic *hot lazy reloading* (checked every 5 seconds via f
 <details>
 <summary><b>Are raw secrets recorded in the audit logs?</b></summary>
 
-No. Session audit logs in `.samar/audit/<timestamp>.jsonl` are cryptographically chained (HMAC/hash-chain). They only record event metadata (event type, tool name, policy decision, reason, actor, and token identifier) — raw secrets are never written.
+No. Session audit logs are stored in `~/.samar/audit/<project-slug>-<hash8>/<timestamp>.jsonl` (or custom directory via `SAMAR_AUDIT_DIR`) with cryptographic hash-chaining (HMAC/hash-chain). Files and directories are created lazily only when audit events occur, preventing repository pollution. They only record event metadata (event type, tool name, policy decision, reason, actor, and token identifier) — raw secrets are never written.
 </details>
 
 ## 🤝 Contributing & Security

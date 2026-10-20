@@ -1,6 +1,7 @@
 package main
 
 import (
+	"context"
 	"encoding/json"
 	"fmt"
 	"os"
@@ -124,24 +125,30 @@ func runSetupClaudeCode(targetDir string, binaryPath string) error {
 	}
 	fmt.Printf("✔ Instruksi perutean agen ditambahkan ke: %s\n", claudeMdFile)
 
-	// 5. Registrasi MCP server via CLI jika ada
-	if _, err := exec.LookPath("claude"); err == nil {
-		checkCmd := exec.Command("claude", "mcp", "get", "samar")
-		if err := checkCmd.Run(); err == nil {
-			fmt.Println("✔ Samar MCP server sudah terdaftar di Claude Code (Status: Connected).")
-		} else {
-			fmt.Println("⏳ Mendaftarkan Samar MCP server ke Claude Code via CLI...")
-			addCmd := exec.Command("claude", "mcp", "add", "--scope", "user", "samar", "-e", "SAMAR_STRICT_ALLOWLIST=0", "--", binaryPath)
-			if out, err := addCmd.CombinedOutput(); err != nil {
-				fmt.Printf("⚠ Gagal menjalankan 'claude mcp add': %v\n  Output: %s\n", err, out)
-				fmt.Printf("  Silakan jalankan manual: claude mcp add --scope user samar -e SAMAR_STRICT_ALLOWLIST=0 -- %s\n", binaryPath)
+	// 5. Registrasi MCP server via CLI jika ada (hanya saat setup direktori aktif, bukan saat pengujian)
+	if targetDir == "" {
+		if _, err := exec.LookPath("claude"); err == nil {
+			ctx, cancel := context.WithTimeout(context.Background(), 3*time.Second)
+			defer cancel()
+			checkCmd := exec.CommandContext(ctx, "claude", "mcp", "get", "samar")
+			if err := checkCmd.Run(); err == nil {
+				fmt.Println("✔ Samar MCP server sudah terdaftar di Claude Code (Status: Connected).")
 			} else {
-				fmt.Println("✔ Berhasil mendaftarkan Samar MCP server ke Claude Code!")
+				fmt.Println("⏳ Mendaftarkan Samar MCP server ke Claude Code via CLI...")
+				addCtx, addCancel := context.WithTimeout(context.Background(), 5*time.Second)
+				defer addCancel()
+				addCmd := exec.CommandContext(addCtx, "claude", "mcp", "add", "--scope", "user", "samar", "-e", "SAMAR_STRICT_ALLOWLIST=0", "--", binaryPath)
+				if out, err := addCmd.CombinedOutput(); err != nil {
+					fmt.Printf("⚠ Gagal menjalankan 'claude mcp add': %v\n  Output: %s\n", err, out)
+					fmt.Printf("  Silakan jalankan manual: claude mcp add --scope user samar -e SAMAR_STRICT_ALLOWLIST=0 -- %s\n", binaryPath)
+				} else {
+					fmt.Println("✔ Berhasil mendaftarkan Samar MCP server ke Claude Code!")
+				}
 			}
+		} else {
+			fmt.Println("ℹ Perintah 'claude' tidak ditemukan di PATH.")
+			fmt.Printf("  Jalankan perintah berikut saat Claude CLI terpasang:\n    claude mcp add --scope user samar -e SAMAR_STRICT_ALLOWLIST=0 -- %s\n", binaryPath)
 		}
-	} else {
-		fmt.Println("ℹ Perintah 'claude' tidak ditemukan di PATH.")
-		fmt.Printf("  Jalankan perintah berikut saat Claude CLI terpasang:\n    claude mcp add --scope user samar -e SAMAR_STRICT_ALLOWLIST=0 -- %s\n", binaryPath)
 	}
 
 	fmt.Println("\n🎉 Setup Claude Code selesai! Semua pembacaan file sensitif (.env, *.pem, *.key) kini otomatis diarahkan ke Samar MCP.")

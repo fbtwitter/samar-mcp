@@ -105,22 +105,15 @@ type auditAdapter struct {
 	log *audit.Logger
 }
 
-// newAuditor membuat file audit per sesi di .samar/audit/<ts>.jsonl.
-// Bila direktori tak bisa dibuat, audit menjadi no-op yang aman (tidak boleh
-// menggagalkan server), ditandai lewat stderr.
+// newAuditor menginisialisasi audit logger per sesi.
+// File dan direktori dibuat secara lazy saat event audit pertama ditulis.
+// Lokasi default: ~/.samar/audit/<project-slug>-<hash8>/<ts>.jsonl
+// Dapat di-override via env SAMAR_AUDIT_DIR / SAFEENV_AUDIT_DIR.
 func newAuditor() server.Auditor {
-	dir := filepath.Join(".samar", "audit")
-	if err := os.MkdirAll(dir, 0o700); err != nil {
-		fmt.Fprintln(os.Stderr, "samar: audit nonaktif (tidak bisa membuat dir):", err)
-		return nil // server.New akan memasang no-op
-	}
+	dir := resolveAuditDir("")
 	sess := time.Now().Format("20060102-150405")
-	f, err := os.OpenFile(filepath.Join(dir, sess+".jsonl"), os.O_CREATE|os.O_APPEND|os.O_WRONLY, 0o600)
-	if err != nil {
-		fmt.Fprintln(os.Stderr, "samar: audit nonaktif (tidak bisa membuka file):", err)
-		return nil
-	}
-	l := audit.New(f, audit.Options{SessionID: sess, Gen: idgen.NewCryptoGen(), HashChain: true})
+	w := newLazyFileWriter(dir, sess+".jsonl")
+	l := audit.New(w, audit.Options{SessionID: sess, Gen: idgen.NewCryptoGen(), HashChain: true})
 	return &auditAdapter{log: l}
 }
 
@@ -182,6 +175,8 @@ PEMAKAIAN
   samar --help             Cetak bantuan ini.
 
 ENVIRONMENT
+  SAMAR_AUDIT_DIR              Direktori log audit kustom (override).
+                               Default: ~/.samar/audit/<project-slug>-<hash8>/
   SAMAR_STRICT_ALLOWLIST=1     Egress allowlist strict: per-project mempersempit
                                global (global ∩ project). Default: union.
   SAMAR_REQUIRE_CONFIRM        Konfirmasi manusia untuk kirim secret ke jaringan:
