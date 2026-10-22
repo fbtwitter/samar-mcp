@@ -12,7 +12,7 @@ var antigravityRuleMd = strings.ReplaceAll(`
 
 Any file or command dealing with credentials, tokens, or secrets MUST use the Samar MCP tools so that values are masked before they reach the model context.
 
-- Reading secrets (@.env*@, @*.pem@, @*.key@, SSH keys, credentials): use @samar_read_file@ (or @mcp_samar_samar_read_file@).
+- Reading secrets (@.env*@, @*.pem@, @*.key@, SSH keys, @mcp_config.json@, @mcp.json@, @.npmrc@, @.netrc@, credentials): use @samar_read_file@ (or @mcp_samar_samar_read_file@).
 - Reading environment variables: use @samar_get_env@ (or @mcp_samar_samar_get_env@).
 - Writing files containing tokens or secrets: use @samar_write_file@ (or @mcp_samar_samar_write_file@).
 - Running shell commands that require secrets: use @samar_execute_command@ (or @mcp_samar_samar_execute_command@).

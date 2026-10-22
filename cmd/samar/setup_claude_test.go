@@ -64,8 +64,8 @@ func TestSetupClaudeCode_Idempotent(t *testing.T) {
 	if !foundUserDeny {
 		t.Errorf("rule user 'Read(/etc/passwd)' hilang dari deny list!")
 	}
-	if len(denyList) != 9 { // 1 user rule + 8 default rules
-		t.Errorf("panjang deny list diharapkan 9, didapat %d", len(denyList))
+	if len(denyList) != 14 { // 1 user rule + 13 default rules
+		t.Errorf("panjang deny list diharapkan 14, didapat %d", len(denyList))
 	}
 
 	// Cek hooks.PreToolUse
@@ -99,7 +99,7 @@ func TestSetupClaudeCode_Idempotent(t *testing.T) {
 	_ = json.Unmarshal(settingsData2, &settings2)
 	permMap2 := settings2["permissions"].(map[string]any)
 	denyList2 := permMap2["deny"].([]any)
-	if len(denyList2) != 9 {
+	if len(denyList2) != 14 {
 		t.Errorf("idempotency check gagal: panjang deny list berubah menjadi %d", len(denyList2))
 	}
 

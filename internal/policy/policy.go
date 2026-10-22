@@ -28,17 +28,30 @@ type Decision struct {
 
 // Policy mengevaluasi string command terhadap aturan egress.
 type Policy struct {
-	allow     HostAllower
-	urlRe     *regexp.Regexp
-	netTools  map[string]struct{}
+	allow        HostAllower
+	urlRe        *regexp.Regexp
+	netTools     map[string]struct{}
+	rawHostTools map[string]struct{}
 }
 
 // New membuat policy dengan HostAllower yang diberikan.
 func New(a HostAllower) *Policy {
 	return &Policy{
-		allow:    a,
-		urlRe:    regexp.MustCompile(`(?i)\b(?:https?|ftp)://([^\s/:"']+)`),
-		netTools: map[string]struct{}{"curl": {}, "wget": {}, "nc": {}, "ncat": {}, "ssh": {}, "scp": {}, "telnet": {}, "ftp": {}},
+		allow: a,
+		// Menangani skema http(s), ftp, sftp, ssh, scp, ws(s) serta mengabaikan userinfo (user:pass@) sebelum host.
+		urlRe: regexp.MustCompile(`(?i)\b(?:https?|s?ftp|ssh|scp|wss?)://(?:[^\s/'"@]+@)?([^\s/:"'?#]+)`),
+		netTools: map[string]struct{}{
+			"curl": {}, "wget": {}, "nc": {}, "ncat": {}, "socat": {},
+			"ssh": {}, "scp": {}, "sftp": {}, "rsync": {}, "telnet": {}, "ftp": {},
+			"invoke-webrequest": {}, "iwr": {}, "invoke-restmethod": {}, "irm": {},
+			"certutil": {}, "bitsadmin": {},
+			"nslookup": {}, "dig": {}, "resolve-dnsname": {}, "ping": {},
+		},
+		// Alat jaringan/DNS yang menerima argumen host mentah tanpa skema URL (rentan bypass jika digabung URL allowlist).
+		rawHostTools: map[string]struct{}{
+			"nc": {}, "ncat": {}, "socat": {}, "telnet": {},
+			"nslookup": {}, "dig": {}, "resolve-dnsname": {}, "ping": {},
+		},
 	}
 }
 
@@ -64,7 +77,7 @@ func (p *Policy) EvaluateCommand(command string, containsToken bool) Decision {
 	}
 
 	hosts := p.extractHosts(command)
-	usesNetTool := p.usesNetworkTool(command)
+	usesNetTool, usesRawHostTool := p.detectNetworkTools(command)
 
 	// Jika ada host eksternal terdeteksi, semuanya wajib ada di allowlist.
 	for _, h := range hosts {
@@ -73,9 +86,9 @@ func (p *Policy) EvaluateCommand(command string, containsToken bool) Decision {
 		}
 	}
 
-	// Network tool dengan token tapi tanpa host yang bisa diurai (mis. host dari
-	// variabel) tidak dapat diverifikasi aman -> fail-closed.
-	if usesNetTool && len(hosts) == 0 {
+	// Raw socket / DNS exfiltration tool (nc, ncat, dig, nslookup, dll.) dengan token
+	// atau network tool tanpa host URL yang bisa diverifikasi -> fail-closed.
+	if usesRawHostTool || (usesNetTool && len(hosts) == 0) {
 		return Decision{Allow: false, Reason: "network_tool_with_unresolved_host"}
 	}
 
@@ -110,20 +123,30 @@ func (p *Policy) extractHosts(cmd string) []string {
 	return hosts
 }
 
-// usesNetworkTool true bila token pertama (nama program) atau token mana pun
-// adalah alat jaringan dikenal.
-func (p *Policy) usesNetworkTool(cmd string) bool {
-	for _, field := range strings.Fields(cmd) {
+// detectNetworkTools memeriksa apakah perintah memanggil network tool atau raw-host/DNS tool.
+func (p *Policy) detectNetworkTools(cmd string) (usesNet, usesRaw bool) {
+	tokens := strings.FieldsFunc(cmd, func(r rune) bool {
+		switch r {
+		case ' ', '\t', '\n', '\r', ';', '|', '&', '(', ')', '`', '$', '<', '>', '"', '\'':
+			return true
+		}
+		return false
+	})
+	for _, field := range tokens {
 		name := strings.ToLower(field)
 		// buang path: /usr/bin/curl -> curl
 		if i := strings.LastIndexAny(name, `/\`); i >= 0 {
 			name = name[i+1:]
 		}
+		name = strings.TrimSuffix(name, ".exe")
 		if _, ok := p.netTools[name]; ok {
-			return true
+			usesNet = true
+		}
+		if _, ok := p.rawHostTools[name]; ok {
+			usesRaw = true
 		}
 	}
-	return false
+	return usesNet, usesRaw
 }
 
 // DenyError memformat Decision menjadi error yang aman ditampilkan ke LLM.

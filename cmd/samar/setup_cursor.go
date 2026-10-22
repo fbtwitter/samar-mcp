@@ -17,7 +17,7 @@ alwaysApply: true
 
 Any file or command dealing with credentials, tokens, or secrets MUST use the Samar MCP tools so that values are masked before they reach the model context. Never use built-in terminal or file read tools on secret files.
 
-- Reading secrets (@.env*@, @*.pem@, @*.key@, SSH keys, credentials): use @mcp__samar__samar_read_file@.
+- Reading secrets (@.env*@, @*.pem@, @*.key@, SSH keys, @mcp_config.json@, @mcp.json@, @.npmrc@, @.netrc@, credentials): use @mcp__samar__samar_read_file@.
 - Reading environment variables: use @mcp__samar__samar_get_env@.
 - Writing files containing tokens or secrets: use @mcp__samar__samar_write_file@.
 - Running shell commands that require secrets: use @mcp__samar__samar_execute_command@.

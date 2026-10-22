@@ -38,6 +38,10 @@ func Cases() []Case {
 		{"mongodb_uri", "e.txt", "mongodb://user:pass@mongo:27017/x", "mongodb://user:pass@mongo:27017/x", "regex"},
 		{"generic_password", "app.conf", "DB_PASSWORD=plainpw123", "plainpw123", "regex"},
 		{"generic_apikey", "app.conf", "MY_API_KEY=zzzyyyxxx000", "zzzyyyxxx000", "regex"},
+		{"mcp_json_conf_token", "mcp_config.json", `{"env": {"CONF_TOKEN": "ODg0Njk2NTI2NTIzOmConfluencePat"}}`, "ODg0Njk2NTI2NTIzOmConfluencePat", "regex"},
+		{"mcp_json_confluence_pat", "mcp_config.json", `{"env": {"CONFLUENCE_PAT": "pat_confluence_secret_987654"}}`, "pat_confluence_secret_987654", "regex"},
+		{"atlassian_cloud_token", "config.yaml", "jira_token: ATATT3xFfGF0abcdef1234567890ABCDEF123456", "ATATT3xFfGF0abcdef1234567890ABCDEF123456", "regex"},
+		{"cli_pat_flag", "run.sh", "confluence-prd-converter --pat myCliPatSecret999", "myCliPatSecret999", "regex"},
 		// Sulit: nilai acak di .env yang TIDAK cocok pola apa pun. Harus tetap
 		// termasking karena file .env mask-semua (PRD §7).
 		{"env_random_value", ".env", "WEIRD_SETTING=q8Zx2Lp0vT", "q8Zx2Lp0vT", "dotenv"},

@@ -93,3 +93,24 @@ func TestSafetyNet_WithRealVault(t *testing.T) {
 		t.Fatalf("secret masih bocor: %q", clean)
 	}
 }
+
+func TestSafetyNet_ScrubPatchesBase64AndURLEncodedLeaks(t *testing.T) {
+	v := vault.New(idgen.NewCryptoGen())
+	secret := "myConfluencePat!@#123"
+	tok := v.Tokenize(secret)
+
+	sn := NewSafetyNet(v, v)
+	// Base64 dari "myConfluencePat!@#123" adalah "bXlDb25mbHVlbmNlUGF0IUAjMTIz"
+	b64Leak := "output base64: bXlDb25mbHVlbmNlUGF0IUAjMTIz"
+	cleanB64, patchedB64 := sn.Scrub(b64Leak)
+	if patchedB64 != 1 || !strings.Contains(cleanB64, tok) {
+		t.Fatalf("Base64 secret tidak tertambal: patched=%d clean=%q", patchedB64, cleanB64)
+	}
+
+	// URL-encoded dari "myConfluencePat!@#123" adalah "myConfluencePat%21%40%23123"
+	urlLeak := "https://example.com/?token=myConfluencePat%21%40%23123"
+	cleanURL, patchedURL := sn.Scrub(urlLeak)
+	if patchedURL != 1 || !strings.Contains(cleanURL, tok) {
+		t.Fatalf("URL-encoded secret tidak tertambal: patched=%d clean=%q", patchedURL, cleanURL)
+	}
+}

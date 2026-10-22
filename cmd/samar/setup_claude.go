@@ -24,7 +24,9 @@ SECRET = re.compile(
     START + r"\.env(?:[\w.-]+)?" + END          # .env, .env.local, .env.production
     + r"|[\w./~-]*\.(?:pem|key)" + END          # server.pem, private.key
     + r"|\bid_(?:rsa|ed25519|ecdsa|dsa)" + END  # SSH private keys
-    + r"|\.envrc" + END                          # direnv config
+    + r"|\.(?:envrc|npmrc|netrc|pypirc)" + END  # direnv & package/network auth configs
+    + r"|\b(?:mcp_config|claude_desktop_config|mcp)\.json" + END  # MCP server configs containing tokens
+    + r"|\.mcp\.json" + END
 )
 
 def main():
@@ -57,7 +59,7 @@ var claudeMdSnippet = strings.ReplaceAll(`
 
 Any file or value that may contain secrets must go through the Samar MCP tools so values are masked before they reach the context. Never use built-in Read/Bash/Grep for these.
 
-- Reading @.env*@, @*.pem@, @*.key@, SSH keys, or config/credential files: use @mcp__samar__samar_read_file@.
+- Reading @.env*@, @*.pem@, @*.key@, SSH keys, MCP configs (@mcp_config.json@, @mcp.json@), or credential files (@.npmrc@, @.netrc@): use @mcp__samar__samar_read_file@.
 - Environment variables: use @mcp__samar__samar_get_env@, not @env@/@printenv@/@echo $VAR@.
 - Writing files that contain @__SAMAR_SECRET_*__@ tokens or secrets: use @mcp__samar__samar_write_file@.
 - Shell commands that read or use secrets (@source .env@, scripts that need keys): use @mcp__samar__samar_execute_command@.
@@ -70,6 +72,11 @@ var defaultDenyRules = []string{
 	"Read(**/.env.*)",
 	"Read(**/*.pem)",
 	"Read(**/*.key)",
+	"Read(**/mcp_config.json)",
+	"Read(**/mcp.json)",
+	"Read(**/.mcp.json)",
+	"Read(**/.npmrc)",
+	"Read(**/.netrc)",
 	"Edit(**/.env)",
 	"Edit(**/.env.*)",
 	"Write(**/.env)",

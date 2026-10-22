@@ -72,6 +72,13 @@ func defaultRules() []rule {
 		{"npm_token", must(`npm_[0-9A-Za-z]{36}`)},
 		{"heroku_api", must(`(?i)heroku[0-9A-Za-z\-]*\s*[:=]\s*["']?[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}`)},
 		{"huggingface", must(`hf_[A-Za-z0-9]{30,}`)},
+		{"atlassian_token", must(`ATATT3xFfGF0[A-Za-z0-9\-_+=]{20,}`)},
+		{"grafana_token", must(`glsa_[A-Za-z0-9]{32}_[A-Fa-f0-9]{8}`)},
+		{"linear_api", must(`lin_api_[A-Za-z0-9]{40}`)},
+		{"postman_api", must(`PMAK-[a-fA-F0-9]{24}-[a-fA-F0-9]{34}`)},
+		{"supabase_pat", must(`sbp_[a-f0-9]{40}`)},
+		{"pypi_token", must(`pypi-AgEIcHlwaS5vcmc[A-Za-z0-9\-_]{50,}`)},
+		{"telegram_bot_token", must(`\b[0-9]{8,10}:AA[A-Za-z0-9_-]{33}\b`)},
 		{"azure_storage_key", must(`(?i)AccountKey\s*=\s*[A-Za-z0-9+/]{40,}={0,2}`)},
 		{"jwt", must(`eyJ[A-Za-z0-9_-]{10,}\.[A-Za-z0-9_-]{10,}\.[A-Za-z0-9_-]{10,}`)},
 
@@ -83,10 +90,15 @@ func defaultRules() []rule {
 		{"private_key_block", must(`(?s)-----BEGIN (?:RSA |EC |OPENSSH |DSA |PGP |ENCRYPTED )?PRIVATE KEY-----.*?-----END (?:RSA |EC |OPENSSH |DSA |PGP |ENCRYPTED )?PRIVATE KEY-----`)},
 
 		// --- Assignment generik: nama field mengandung kata-kunci secret ---
-		// Hanya VALUE (grup "secret") yang dimasking. Kata-kunci diperluas.
-		{"generic_assignment", must(`(?i)(?:[A-Z0-9_]*(?:SECRET|PASSWORD|PASSWD|PWD|TOKEN|API[_-]?KEY|ACCESS[_-]?KEY|PRIVATE[_-]?KEY|CLIENT[_-]?SECRET|CREDENTIAL|AUTH|BEARER|SIGNING[_-]?KEY|ENCRYPTION[_-]?KEY|SALT|DSN|CONNECTION[_-]?STRING)[A-Z0-9_]*)\s*[:=]\s*["']?(?P<secret>[^\s"'#]+)["']?`)},
+		// Mendukung format .conf, YAML, maupun JSON dengan key ber-quote (mis. "CONF_TOKEN": "...").
+		// Hanya VALUE (grup "secret") yang dimasking.
+		{"generic_assignment", must(`(?i)(?:[A-Z0-9_]*(?:SECRET|PASSWORD|PASSWD|PWD|PASSPHRASE|TOKEN|API[_-]?KEY|ACCESS[_-]?KEY|PRIVATE[_-]?KEY|CLIENT[_-]?SECRET|CREDENTIAL|AUTH|BEARER|SIGNING[_-]?KEY|ENCRYPTION[_-]?KEY|MASTER[_-]?KEY|APP[_-]?KEY|WEBHOOK[_-]?SECRET|REFRESH[_-]?TOKEN|SESSION[_-]?KEY|COOKIE|SALT|DSN|CONNECTION[_-]?STRING)[A-Z0-9_]*|(?:[A-Z0-9_]*[_-])?PAT(?:[_-][A-Z0-9_]*)?)["']?\s*[:=]\s*["']?(?P<secret>[^\s"'#,}\];]+)["']?`)},
 
-		// --- Header Authorization: Bearer/Basic <token> ---
+		// --- Header Authorization & Custom Auth Headers ---
 		{"authorization_header", must(`(?i)authorization["']?\s*[:=]\s*["']?(?:bearer|basic)\s+(?P<secret>[A-Za-z0-9\-._~+/]+=*)`)},
+		{"custom_auth_header", must(`(?i)(?:x-api-key|x-auth-token|x-atlassian-token|private-token)["']?\s*[:=]\s*["']?(?P<secret>[A-Za-z0-9\-._~+/]{8,}=*)`)},
+
+		// --- Argumen flag CLI kredensial (--pat, --token, --password, curl -u user:pass) ---
+		{"cli_credential_flag", must(`(?i)(?:--(?:pat|token|api-key|apikey|password|passwd|secret|client-secret|access-token)\s+["']?|-u\s+["']?[A-Za-z0-9_.@-]+:)(?P<secret>[^\s"'#;]+)["']?`)},
 	}
 }

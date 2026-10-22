@@ -19,6 +19,9 @@ rules:
       - "**/.env.*"
       - "**/*.pem"
       - "**/*.key"
+      - "**/mcp_config.json"
+      - "**/.npmrc"
+      - "**/.netrc"
       - "secrets/**"
 
   - capability: fs_write
@@ -36,7 +39,7 @@ var kiroSteeringSnippet = strings.ReplaceAll(`
 
 Any file or environment variable containing credentials, secrets, or API keys must be handled strictly via Samar MCP tools to ensure tokens are masked before reaching the model context:
 
-- Reading secrets (@.env*@, @*.pem@, @*.key@, SSH keys, credentials): use @samar_read_file@.
+- Reading secrets (@.env*@, @*.pem@, @*.key@, SSH keys, @mcp_config.json@, @mcp.json@, @.npmrc@, @.netrc@, credentials): use @samar_read_file@.
 - Reading environment variables: use @samar_get_env@.
 - Writing files containing secrets or tokens: use @samar_write_file@.
 - Running commands requiring secrets: use @samar_execute_command@.

@@ -87,13 +87,29 @@ func TestRegex_ExpandedPatterns(t *testing.T) {
 		"huggingface":   "hf_ABCDEFGHIJKLMNOPQRSTUVWXYZ01234567",
 		"basic_auth":    "https://user:p4ssw0rd@internal.example.com/path",
 		"access_key":    "access_key: zzzyyyxxx000",
-		"client_secret": "client_secret = abcdef123456",
-		"authorization": `Authorization: Bearer abcDEF123456tokenvalue`,
+		"client_secret":     "client_secret = abcdef123456",
+		"authorization":     `Authorization: Bearer abcDEF123456tokenvalue`,
+		"json_conf_token":   `"CONF_TOKEN": "ODg0Njk2NTI2NTIzOmConfluencePatSecret"`,
+		"json_pat":          `"CONFLUENCE_PAT": "my-secret-pat-value-999"`,
+		"atlassian_token":   `ATATT3xFfGF0abcdef1234567890ABCDEF123456`,
+		"custom_header":     `X-API-Key: my_custom_header_secret_key_123`,
+		"cli_flag_pat":      `samar --pat cli_secret_pat_value`,
+		"curl_basic_u":      `curl -u admin:curlBasicSecretPass123 https://confluence.corp/rest/api`,
 	}
 	for name, content := range cases {
 		if len(r.Detect("f.txt", content)) == 0 {
 			t.Errorf("%s: tidak terdeteksi dalam %q", name, content)
 		}
+	}
+}
+
+func TestRegex_JSONConfigMasksOnlySecretValue(t *testing.T) {
+	r := NewRegex()
+	content := `{"env": {"CONF_TOKEN": "secretConfluenceToken123", "CONFLUENCE_PAT": "secretPat456"}}`
+	fs := r.Detect("mcp_config.json", content)
+	vals := found(content, fs)
+	if len(vals) != 2 || vals[0] != "secretConfluenceToken123" || vals[1] != "secretPat456" {
+		t.Fatalf("JSON config secret value tidak tepat terdeteksi: %v", vals)
 	}
 }
 
@@ -107,6 +123,8 @@ func TestRegex_NoFalsePositiveOnNeutralValues(t *testing.T) {
 		"timeout: 30000",
 		"id: 550e8400-e29b-41d4-a716-446655440000", // UUID polos
 		"name: my-service",
+		"PATH: /usr/local/bin:/usr/bin",
+		"pattern: *.go",
 	}
 	for _, c := range neutral {
 		if fs := r.Detect("config.yaml", c); len(fs) != 0 {

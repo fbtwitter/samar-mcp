@@ -9,6 +9,7 @@ import (
 
 	"github.com/hanifalkauni/samar-mcp/internal/detector"
 	"github.com/hanifalkauni/samar-mcp/internal/idgen"
+	"github.com/hanifalkauni/samar-mcp/internal/leakscan"
 	"github.com/hanifalkauni/samar-mcp/internal/masking"
 	"github.com/hanifalkauni/samar-mcp/internal/policy"
 	"github.com/hanifalkauni/samar-mcp/internal/restore"
@@ -461,5 +462,35 @@ func TestAudit_WriteAbortEmitsEvent(t *testing.T) {
 	call(t, s.handleWriteFile, map[string]any{"path": "o", "content": "k=__SAMAR_SECRET_DEADBEEF__"})
 	if len(aud.events) == 0 || aud.events[len(aud.events)-1] != "abort/abort" {
 		t.Fatalf("harap abort/abort, dapat %v", aud.events)
+	}
+}
+
+func TestEndToEnd_MCPConfigMaskRestoreAndEncodedLeakScrub(t *testing.T) {
+	mcpJSON := `{"mcpServers":{"confluence":{"env":{"CONF_TOKEN":"secretConfToken999","CONFLUENCE_PAT":"secretPatValue888"}}}}`
+	w := &fakeWriter{}
+	// Simulasikan command lokal yang mencoba membocorkan Base64 dari "secretConfToken999" ("c2VjcmV0Q29uZlRva2VuOTk5")
+	run := &fakeRunner{result: safeio.CommandResult{Stdout: "b64=c2VjcmV0Q29uZlRva2VuOTk5", ExitCode: 0}}
+	d, v := fullDeps(fakeFiles{data: map[string]string{"mcp_config.json": mcpJSON}}, fakeEnv{}, w, run, allowNone{})
+	d.SafetyNet = leakscan.NewSafetyNet(v, v)
+	s := mustServer(t, d)
+
+	// 1. Baca mcp_config.json -> kedua secret wajib termasking
+	readRes := call(t, s.handleReadFile, map[string]any{"path": "mcp_config.json"})
+	maskedOut := resultText(readRes)
+	if strings.Contains(maskedOut, "secretConfToken999") || strings.Contains(maskedOut, "secretPatValue888") {
+		t.Fatalf("kredensial di mcp_config.json bocor: %s", maskedOut)
+	}
+
+	// 2. Tulis kembali hasil termasking -> harus kembali ke JSON semula dengan nilai asli
+	writeRes := call(t, s.handleWriteFile, map[string]any{"path": "mcp_config_copy.json", "content": maskedOut})
+	if writeRes.IsError || w.wrote["mcp_config_copy.json"] != mcpJSON {
+		t.Fatalf("round-trip write mcp_config.json gagal: %q", w.wrote["mcp_config_copy.json"])
+	}
+
+	// 3. Jalankan perintah lokal yang outputnya berisi Base64 dari secret -> SafetyNet harus menambalnya
+	execRes := call(t, s.handleExecuteCommand, map[string]any{"command": "echo test"})
+	execOut := resultText(execRes)
+	if strings.Contains(execOut, "c2VjcmV0Q29uZlRva2VuOTk5") {
+		t.Fatalf("kebocoran Base64 dari secret vault tidak ditambal oleh SafetyNet: %s", execOut)
 	}
 }

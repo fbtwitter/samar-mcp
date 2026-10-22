@@ -11,7 +11,9 @@ SECRET = re.compile(
     START + r"\.env(?:[\w.-]+)?" + END          # .env, .env.local, .env.production
     + r"|[\w./~-]*\.(?:pem|key)" + END          # server.pem, private.key
     + r"|\bid_(?:rsa|ed25519|ecdsa|dsa)" + END  # SSH private keys
-    + r"|\.envrc" + END                          # direnv config
+    + r"|\.(?:envrc|npmrc|netrc|pypirc)" + END  # direnv & package/network auth configs
+    + r"|\b(?:mcp_config|claude_desktop_config|mcp)\.json" + END  # MCP server configs containing tokens
+    + r"|\.mcp\.json" + END
 )
 
 def main():

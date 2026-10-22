@@ -3,7 +3,11 @@
 // Dipakai oleh corpus adversarial (PRD §12) dan self-test redaksi audit (§10).
 package leakscan
 
-import "strings"
+import (
+	"encoding/base64"
+	"net/url"
+	"strings"
+)
 
 // Scan mengembalikan daftar secret (dari secrets) yang DITEMUKAN di dalam text.
 // Hasil kosong berarti tidak ada kebocoran. Secret kosong diabaikan.
@@ -80,8 +84,36 @@ func (s *SafetyNet) Scrub(text string) (clean string, patched int) {
 			out = strings.ReplaceAll(out, sec, tok)
 			patched += n
 		}
+		// Pertahanan terhadap kebocoran ter-encode (Base64 / URL-encoded) untuk secret
+		// dengan panjang >= 6 karakter (menghindari false-positive pada string pendek).
+		if len(sec) >= 6 {
+			variants := encodedVariants(sec)
+			for _, v := range variants {
+				if v != "" && v != sec && strings.Contains(out, v) {
+					tok := s.tok.Tokenize(sec)
+					n := strings.Count(out, v)
+					out = strings.ReplaceAll(out, v, tok)
+					patched += n
+				}
+			}
+		}
 	}
 	return out, patched
+}
+
+// encodedVariants menghasilkan representasi Base64 (Std & Raw) dan URL-encoded dari secret.
+func encodedVariants(sec string) []string {
+	b64Std := base64.StdEncoding.EncodeToString([]byte(sec))
+	b64Raw := base64.RawStdEncoding.EncodeToString([]byte(sec))
+	urlEnc := url.QueryEscape(sec)
+	out := []string{b64Std}
+	if b64Raw != b64Std {
+		out = append(out, b64Raw)
+	}
+	if urlEnc != sec {
+		out = append(out, urlEnc)
+	}
+	return out
 }
 
 // sortByLenDesc mengurutkan slice string menurun berdasarkan panjang (insertion
