@@ -28,7 +28,7 @@ import (
 	"github.com/hanifalkauni/samar-mcp/internal/vault"
 )
 
-const version = "1.2.1"
+const version = "1.3.0"
 
 // policyGuard mengadaptasi *policy.Policy ke interface server.Guard.
 type policyGuard struct {
