@@ -10,9 +10,9 @@
 
 ---
 
-Privacy & security middleware for the Model Context Protocol (MCP). Samar intercepts and masks sensitive credentials (API keys, passwords, private keys, database URLs, and `.env` variables) before they reach the LLM context (inbound), replacing them with deterministic reversible tokens backed by an in-memory ephemeral vault (zero-persistence). Outbound operations (file writes and command executions) safely restore tokens to real values while enforcing strict egress allowlists and fail-closed policies.
+Privacy middleware for the Model Context Protocol (MCP). Samar masks detected credentials before they reach the LLM context, replacing them with reversible tokens backed by an in-memory vault. File writes and shell commands can restore those tokens. Every token-bearing shell command requires human approval by default; URL and utility checks are heuristic and are not a network sandbox.
 
-> **Version: v1.2.1** — Production-ready privacy middleware featuring inbound credential masking, fail-closed outbound restoration, network egress policy enforcement, human-in-the-loop confirmation (`off`, `elicit`, `deny`), and cryptographic HMAC audit logging.
+> **Version: v1.3.0** — Secret masking, fail-closed token restoration, human approval for token-bearing commands by default, heuristic egress checks, and SHA-256 hash-chained audit logs.
 
 ---
 
@@ -167,8 +167,8 @@ Runs Samar on-the-fly directly from the GitHub repository:
 
 ### Outbound (M1)
 - `samar_write_file(path, content)` — restores tokens back to original secrets before writing; **aborts** if tokens are corrupted or truncated (fail-closed).
-- `samar_execute_command(command, cwd?)` — evaluates exfiltration policy **prior** to unmasking; unmasks and executes command; re-masks command output.
-- **Exfiltration policy (§5.6):** tokens destined for external hosts not on the allowlist are blocked (fail-closed).
+- `samar_execute_command(command, cwd?)` — requires MCP elicitation approval before restoring any token by default; then executes the command and re-masks output. Samar applies a 30-second timeout to the shell process and caps stdout and stderr at 1 MiB each; this is not process or network isolation.
+- **Egress checks:** detected non-allowlisted URLs and unresolved known network tools are blocked before unmasking. Shell command inspection is heuristic, so it cannot prove that an arbitrary command is local-only. Elicitation fails closed when unsupported; setting `SAMAR_REQUIRE_CONFIRM=off` explicitly bypasses approval.
 - **Multi-layer egress allowlist (§13.3):** `global ∪ per-project`, hot lazy-reloading without restarts (§13.5).
 
 ### Core Engine
@@ -196,7 +196,7 @@ Runs Samar on-the-fly directly from the GitHub repository:
 | :--- | :--- | :--- | :--- |
 | `SAMAR_AUDIT_DIR` | Directory path | `~/.samar/audit/<project-slug>-<hash8>/` | Custom audit log directory. Files and directories are created lazily upon the first logged event (idle sessions produce 0 files). (Backward-compatible fallback: `SAFEENV_AUDIT_DIR`). |
 | `SAMAR_STRICT_ALLOWLIST` | `1` / `0` | `0` (union) | When set to `1`, per-project allowlist narrows the global allowlist (`global ∩ project`). Default: union merge (`global ∪ project`). (Backward-compatible fallback: `SAFEENV_STRICT_ALLOWLIST`). |
-| `SAMAR_REQUIRE_CONFIRM` | `""`, `"off"`, `"elicit"`, `"deny"` | `""` (off) | Human-in-the-loop confirmation before outbound network calls containing unmasked secrets:<br>• `""` / `"off"`: auto-approve if destination host is in allowlist (warning logged to stderr).<br>• `"elicit"`: request interactive approval via MCP elicitation (fail-closed if client lacks support).<br>• `"deny"`: reject all network commands containing tokens.<br>(Backward-compatible fallback: `SAFEENV_REQUIRE_CONFIRM`). |
+| `SAMAR_REQUIRE_CONFIRM` | `""`, `"off"`, `"elicit"`, `"deny"` | `"elicit"` | Approval before any shell command containing restored secrets:<br>• `""` / `"elicit"`: request approval via MCP elicitation (fail-closed if the client lacks support).<br>• `"off"`: explicitly auto-approve token-bearing commands; unsafe with real secrets.<br>• `"deny"`: reject all token-bearing commands.<br>(Backward-compatible fallback: `SAFEENV_REQUIRE_CONFIRM`). |
 | `SAMAR_ENTROPY` | `1` / `0` | `0` (off) | When `1`, enables opt-in Shannon-entropy detection of bare high-entropy tokens (no keyword, non-`.env`). May increase false positives on hashes/UUIDs/base64. (Backward-compatible fallback: `SAFEENV_ENTROPY`). |
 | `SAMAR_PII` | `1` / `0` | `0` (off) | When `1`, enables opt-in PII detection: email, credit card (Luhn), IBAN (mod-97), IPv4 (octet range). May increase false positives. (Backward-compatible fallback: `SAFEENV_PII`). |
 
@@ -230,7 +230,7 @@ samar-mcp/
 │   └── samar/               # Composition root & MCP binary entry point
 ├── internal/
 │   ├── allowlist/           # Multi-layer egress allowlist & lazy reload
-│   ├── audit/               # JSONL audit logger with HMAC / hash-chaining
+│   ├── audit/               # JSONL audit logger with an unkeyed SHA-256 hash chain
 │   ├── detector/            # Secret scanner (DotEnv parser & Regex rulesets)
 │   ├── idgen/               # Random token ID generator (crypto/rand)
 │   ├── masking/             # Inbound sanitization engine (detect -> tokenize -> replace)
@@ -272,7 +272,7 @@ The harness reports `PROTECTED` / `EXPECTED-LEAK` (design limits) / `UNEXPECTED-
 
 - **Zero-Persistence:** Vault is strictly in-memory; completely destroyed upon process termination. No MCP tool exists to unmask values from the LLM side.
 - **Anti-Brute Force:** Random tokens do not leak original secret contents or hashes.
-- **DoS Guard:** Files exceeding 10 MB are rejected with controlled error handling.
+- **DoS Guards:** Files exceeding 10 MB are rejected. Shell processes have a 30-second timeout, with stdout and stderr capped at 1 MiB each. This does not guarantee cleanup of child processes.
 
 ---
 
@@ -299,7 +299,7 @@ No. Samar utilizes automatic *hot lazy reloading* (checked every 5 seconds via f
 <details>
 <summary><b>Are raw secrets recorded in the audit logs?</b></summary>
 
-No. Session audit logs are stored in `~/.samar/audit/<project-slug>-<hash8>/<timestamp>.jsonl` (or custom directory via `SAMAR_AUDIT_DIR`) with cryptographic hash-chaining (HMAC/hash-chain). Files and directories are created lazily only when audit events occur, preventing repository pollution. They only record event metadata (event type, tool name, policy decision, reason, actor, and token identifier) — raw secrets are never written.
+No. Session audit logs are stored in `~/.samar/audit/<project-slug>-<hash8>/<timestamp>.jsonl` (or a custom directory via `SAMAR_AUDIT_DIR`) with an unkeyed SHA-256 hash chain. The chain can expose accidental or partial edits, but it does not authenticate a log against someone able to rewrite and recompute the file. Log write failures are reported to stderr and can leave the audit incomplete. Events record metadata only; raw secrets are not written.
 </details>
 
 ## 🤝 Contributing & Security

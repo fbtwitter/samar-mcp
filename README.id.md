@@ -10,9 +10,9 @@
 
 ---
 
-Privacy & security middleware untuk Model Context Protocol (MCP). Samar mencegat dan menyamarkan (*masking*) kredensial sensitif (API key, password, private key, URL database, dan variabel `.env`) sebelum masuk ke konteks LLM (*inbound*), menggantikannya dengan token reversibel deterministik berbasis *ephemeral vault* di memori (*zero-persistence*). Operasi *outbound* (penulisan file dan eksekusi perintah shell) memulihkan token kembali ke nilai aslinya secara aman di bawah pengawasan *egress allowlist* dan kebijakan *fail-closed*.
+Middleware privasi untuk Model Context Protocol (MCP). Samar menyamarkan kredensial yang terdeteksi sebelum masuk ke konteks LLM, menggantikannya dengan token reversibel di vault dalam memori. Penulisan file dan perintah shell dapat memulihkan token tersebut. Secara default, setiap command shell yang membawa token memerlukan persetujuan manusia; pemeriksaan URL dan utilitas bersifat heuristik dan bukan sandbox jaringan.
 
-> **Versi: v1.2.1** — Middleware privasi dan keamanan siap produksi dengan fitur *masking* kredensial *inbound*, restorasi *outbound fail-closed*, proteksi *egress* jaringan, konfirmasi *human-in-the-loop* (`off`, `elicit`, `deny`), dan log audit kriptografis HMAC.
+> **Versi: v1.3.0** — Masking secret, restorasi token *fail-closed*, persetujuan manusia untuk command bertoken secara default, pemeriksaan *egress* heuristik, dan audit log dengan rantai hash SHA-256.
 
 ---
 
@@ -167,8 +167,8 @@ Menjalankan Samar secara on-the-fly langsung dari repositori GitHub:
 
 ### Outbound (M1)
 - `samar_write_file(path, content)` — restorasi token → secret asli sebelum ditulis; **abort** bila token korup/terpotong (fail-closed).
-- `samar_execute_command(command, cwd?)` — evaluasi policy exfiltration **sebelum** unmask; unmask lalu jalankan; output di-mask ulang.
-- **Policy exfiltration (§5.6):** token yang mengalir ke host eksternal non-allowlist → eksekusi diblokir (fail-closed).
+- `samar_execute_command(command, cwd?)` — secara default meminta persetujuan MCP elicitation sebelum merestorasi token apa pun; lalu menjalankan command dan menyamarkan ulang output. Proses shell memiliki timeout 30 detik; stdout dan stderr dibatasi masing-masing 1 MiB. Ini bukan isolasi proses atau jaringan.
+- **Pemeriksaan egress:** URL non-allowlist yang terdeteksi dan utilitas jaringan yang host-nya tidak dapat dipastikan diblokir sebelum unmask. Pemeriksaan teks shell bersifat heuristik dan tidak dapat membuktikan command arbitrer hanya bekerja lokal. Elicitation gagal tertutup bila tidak didukung; `SAMAR_REQUIRE_CONFIRM=off` secara eksplisit melewati persetujuan.
 - **Egress allowlist bertingkat (§13.3):** `global ∪ per-project`, lazy reload tanpa restart (§13.5).
 
 ### Inti
@@ -196,7 +196,7 @@ Menjalankan Samar secara on-the-fly langsung dari repositori GitHub:
 | :--- | :--- | :--- | :--- |
 | `SAMAR_AUDIT_DIR` | Path direktori | `~/.samar/audit/<project-slug>-<hash8>/` | Direktori log audit kustom (override). File dan direktori dibuat secara *lazy* saat event pertama ditulis (sesi idle tidak membuat file kosong). (Dukungan mundur: `SAFEENV_AUDIT_DIR`). |
 | `SAMAR_STRICT_ALLOWLIST` | `1` / `0` | `0` (union) | Jika `1`, egress allowlist per-project mempersempit global (`global ∩ project`). Default: penggabungan (`global ∪ project`). (Dukungan mundur: `SAFEENV_STRICT_ALLOWLIST`). |
-| `SAMAR_REQUIRE_CONFIRM` | `""`, `"off"`, `"elicit"`, `"deny"` | `""` (off) | Kontrol konfirmasi manusia saat perintah jaringan mengirim secret:<br>• `""` / `"off"`: auto-approve jika host terdaftar di allowlist (peringatan dicetak ke stderr).<br>• `"elicit"`: minta persetujuan interaktif via MCP elicitation (fail-closed bila tidak didukung client).<br>• `"deny"`: selalu tolak aksi jaringan bertoken.<br>(Dukungan mundur: `SAFEENV_REQUIRE_CONFIRM`). |
+| `SAMAR_REQUIRE_CONFIRM` | `""`, `"off"`, `"elicit"`, `"deny"` | `"elicit"` | Persetujuan sebelum command shell yang membawa secret hasil restorasi: `""` / `"elicit"` meminta persetujuan MCP elicitation (gagal tertutup bila client tidak mendukung); `"off"` secara eksplisit auto-approve command bertoken dan berisiko untuk secret asli; `"deny"` menolak semua command bertoken. `SAFEENV_REQUIRE_CONFIRM` tetap didukung. |
 | `SAMAR_ENTROPY` | `1` / `0` | `0` (off) | Jika `1`, aktifkan deteksi entropi Shannon (opt-in) untuk token telanjang berentropi tinggi (tanpa kata-kunci, non-`.env`). Bisa menambah false-positive pada hash/UUID/base64. (Dukungan mundur: `SAFEENV_ENTROPY`). |
 | `SAMAR_PII` | `1` / `0` | `0` (off) | Jika `1`, aktifkan deteksi PII (opt-in): email, kartu kredit (Luhn), IBAN (mod-97), IPv4 (rentang oktet). Bisa menambah false-positive. (Dukungan mundur: `SAFEENV_PII`). |
 
@@ -231,7 +231,7 @@ samar-mcp/
 │   └── samar/               # Composition root & entry point binary MCP
 ├── internal/
 │   ├── allowlist/           # Multi-layer egress allowlist & lazy reload
-│   ├── audit/               # Audit logger JSONL dengan HMAC / hash-chaining
+│   ├── audit/               # Audit logger JSONL dengan rantai hash SHA-256 tanpa kunci
 │   ├── detector/            # Scanner kredensial (DotEnv parser & Regex rules)
 │   ├── idgen/               # Generator ID token acak (crypto/rand)
 │   ├── masking/             # Engine sanitasi inbound (detect -> tokenize -> replace)
@@ -279,7 +279,7 @@ bawaannya (Lapis 2 / bypass). Untuk menguji bypass di client nyata, ikuti
 
 - **Zero-Persistence:** Vault strictly in-memory; hangus seketika saat proses berhenti. Tidak ada tool untuk unmask dari sisi LLM.
 - **Anti-Brute Force:** Token acak tidak diturunkan dari nilai asli (bukan hash).
-- **DoS Guard:** File berukuran > 10 MB ditolak dengan error terkontrol.
+- **Perlindungan DoS:** File lebih dari 10 MB ditolak. Proses shell memiliki timeout 30 detik; stdout dan stderr dibatasi masing-masing 1 MiB. Proses turunan tidak dijamin ikut dihentikan.
 
 ---
 
@@ -306,7 +306,7 @@ Tidak. Samar mengimplementasikan *lazy reload* otomatis (interval 5 detik berdas
 <details>
 <summary><b>Apakah secret asli ikut dicatat ke dalam log audit?</b></summary>
 
-Tidak. Log audit disimpan di `~/.samar/audit/<project-slug>-<hash8>/<timestamp>.jsonl` (atau direktori kustom via `SAMAR_AUDIT_DIR`) dengan HMAC/hash-chain anti-tamper. File dan folder dibuat secara *lazy* hanya saat ada event audit, sehingga tidak mengotori repositori proyek. Log ini hanya mencatat metadata event (tipe event, nama tool, keputusan policy, alasan, dan aktor), tidak pernah mencatat secret mentah.
+Tidak. Log audit sesi disimpan di `~/.samar/audit/<project-slug>-<hash8>/<timestamp>.jsonl` (atau direktori kustom melalui `SAMAR_AUDIT_DIR`) dengan rantai hash SHA-256 tanpa kunci. Rantai dapat menunjukkan perubahan tidak sengaja atau sebagian, tetapi tidak mengautentikasi log terhadap pihak yang dapat menulis ulang dan menghitung ulang file. Kegagalan penulisan dilaporkan ke stderr dan dapat membuat audit tidak lengkap. Event hanya mencatat metadata; secret mentah tidak ditulis.
 </details>
 
 ## 🤝 Kontribusi & Keamanan

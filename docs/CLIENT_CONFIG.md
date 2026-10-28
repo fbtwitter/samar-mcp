@@ -159,9 +159,7 @@ This automatically registers Samar in `~/.gemini/config/mcp_config.json` and ins
 
 ## Egress allowlist (outbound path)
 
-`samar_execute_command` blocks sending secrets to external hosts not on the
-allowlist (PRD §5.6). The host list (one per line, `#` for comments) is read from
-two locations and reloaded automatically with no restart:
+Samar blocks detected non-allowlisted URLs and known network tools with unresolved hosts before restoring secrets. Command inspection is heuristic: arbitrary shell can use network paths not visible in command text. Every token-bearing command therefore requires MCP elicitation by default; requests fail closed when the client lacks elicitation. Setting `SAMAR_REQUIRE_CONFIRM=off` explicitly bypasses approval and is unsafe with real secrets. The host list below reloads automatically.
 
 - **Global:** `~/.samar/allowlist` (fallback: `~/.safeenv/allowlist`)
 - **Per-project:** `.samar/allowlist` (fallback: `.safeenv/allowlist`) at the project root
