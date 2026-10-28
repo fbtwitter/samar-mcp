@@ -104,6 +104,7 @@ samar setup all           # Setup semua client yang terdeteksi sekaligus
 
 ### 3. Uji masking dengan file contoh
 Uji ini memeriksa pembacaan melalui Samar. Tool file bawaan client dapat melewati Samar jika aksesnya tidak dibatasi; lihat [Konfigurasi Manual Client](#-konfigurasi-manual-client-alternatif).
+
 1. Buat file `.env` tiruan di workspace Anda:
    ```bash
    echo "TEST_SECRET=my_dummy_secret_token_123" > .env

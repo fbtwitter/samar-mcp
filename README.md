@@ -104,6 +104,7 @@ samar setup all           # Setup all supported AI clients in one command
 
 ### 3. Check masking with a test file
 This test checks reads through Samar. A client's built-in file tools can bypass Samar unless you restrict them; see [Manual Client Configuration](#-manual-client-configuration-alternative).
+
 1. Create a dummy test `.env` file in your workspace:
    ```bash
    echo "TEST_SECRET=my_dummy_secret_token_123" > .env
